@@ -522,7 +522,12 @@ const AdminSettings: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-6">
-                {payments.map((pm, idx) => (
+                {payments.map((pm, idx) => {
+                    // Safe access to type with upper case normalization to prevent mismatches
+                    const pType = pm.type ? pm.type.toUpperCase().trim() : '';
+                    const isManual = pType === 'BANK' || pType === 'E-WALLET' || pType === 'QRIS';
+
+                    return (
                     <div key={pm.id || idx} className="bg-dark-900/50 p-4 rounded-lg border border-dark-700 shadow-sm">
                         <div className="flex justify-between items-center mb-4 bg-dark-800 p-2 rounded">
                             <div className="flex items-center gap-2">
@@ -555,15 +560,15 @@ const AdminSettings: React.FC = () => {
                                 />
                             </div>
 
-                            {(pm.type === 'BANK' || pm.type === 'E-WALLET' || pm.type === 'QRIS') && (
+                            {isManual && (
                                 <>
                                     <div>
-                                        <label className="block text-xs text-gray-500 mb-1">{pm.type === 'QRIS' ? 'URL Gambar / Konten QR' : 'Nomor Rekening / No. HP'}</label>
+                                        <label className="block text-xs text-gray-500 mb-1">{pType === 'QRIS' ? 'URL Gambar / Konten QR' : 'Nomor Rekening / No. HP'}</label>
                                         <input 
                                             value={pm.accountNumber || ''} 
                                             onChange={e => { const newP = [...payments]; newP[idx] = { ...newP[idx], accountNumber: e.target.value }; setPayments(newP); }} 
                                             className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" 
-                                            placeholder={pm.type === 'QRIS' ? 'https://...' : '0123...'} 
+                                            placeholder={pType === 'QRIS' ? 'https://...' : '0123...'} 
                                         />
                                     </div>
                                     <div>
@@ -589,7 +594,7 @@ const AdminSettings: React.FC = () => {
                             </div>
                         </div>
                     </div>
-                ))}
+                )})}
                 </div>
             )}
         </div>
@@ -1044,7 +1049,7 @@ export default function App() {
           if (payData) {
               const mappedPayments = payData.map((p: any) => ({ 
                   id: p.id, 
-                  type: p.type, 
+                  type: p.type?.toUpperCase(), // Force Uppercase
                   name: p.name, 
                   accountNumber: p.account_number, 
                   accountName: p.account_name, 
