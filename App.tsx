@@ -251,7 +251,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Dashboard</h2>
+          <h2 className="text-2xl font-bold text-white">Dashboard <span className="text-xs text-gray-500 font-normal ml-2">v2.0 (Live Fix)</span></h2>
           <div className={`px-3 py-1 rounded-full text-xs font-bold border ${isCloudConnected ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-gray-500/10 text-gray-400 border-gray-500/30'}`}>
               {isCloudConnected ? '● Cloud Connected' : '○ Local Mode'}
           </div>
@@ -523,9 +523,11 @@ const AdminSettings: React.FC = () => {
             ) : (
                 <div className="space-y-6">
                 {payments.map((pm, idx) => {
-                    // Safe access to type with upper case normalization to prevent mismatches
-                    const pType = pm.type ? pm.type.toUpperCase().trim() : '';
-                    const isManual = pType === 'BANK' || pType === 'E-WALLET' || pType === 'QRIS';
+                    // Normalize type for safe checking
+                    const pType = pm.type ? pm.type.toUpperCase().trim() : 'BANK'; 
+                    // CRITICAL FIX: Show manual inputs for EVERYTHING except TRIPAY.
+                    // This prevents fields from hiding if Supabase has weird data like "Bank" (mixed case) or "DANA".
+                    const isManual = pType !== 'TRIPAY'; 
 
                     return (
                     <div key={pm.id || idx} className="bg-dark-900/50 p-4 rounded-lg border border-dark-700 shadow-sm">
@@ -560,6 +562,7 @@ const AdminSettings: React.FC = () => {
                                 />
                             </div>
 
+                            {/* Show inputs if NOT Tripay (Manual Payment) */}
                             {isManual && (
                                 <>
                                     <div>
@@ -1049,7 +1052,7 @@ export default function App() {
           if (payData) {
               const mappedPayments = payData.map((p: any) => ({ 
                   id: p.id, 
-                  type: p.type?.toUpperCase(), // Force Uppercase
+                  type: (p.type || 'BANK').toUpperCase().trim(), // Force Uppercase & Fallback
                   name: p.name, 
                   accountNumber: p.account_number, 
                   accountName: p.account_name, 
