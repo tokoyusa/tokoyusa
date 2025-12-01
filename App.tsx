@@ -496,13 +496,42 @@ const AdminSettings: React.FC = () => {
         </div>
 
         <div className="bg-dark-800 p-6 rounded-xl border border-dark-700">
-            <h3 className="text-lg font-bold text-white mb-4 border-b border-dark-700 pb-2">Pembayaran</h3>
+            <h3 className="text-lg font-bold text-white mb-4 border-b border-dark-700 pb-2">Pengaturan Pembayaran</h3>
+            <div className="space-y-6">
             {payments.map((pm, idx) => (
-                <div key={pm.id} className="mb-4 pb-4 border-b border-dark-700 last:border-0 last:pb-0">
-                    <div className="flex justify-between items-center mb-2"><span className="font-bold text-primary">{pm.type} - {pm.name}</span><input type="checkbox" checked={pm.isActive !== false} onChange={e => { const newP = [...payments]; newP[idx].isActive = e.target.checked; setPayments(newP); }} className="accent-primary w-4 h-4" /></div>
-                    {(pm.type === 'BANK' || pm.type === 'E-WALLET') && (<div className="grid grid-cols-2 gap-2"><input value={pm.accountNumber || ''} onChange={e => { const newP = [...payments]; newP[idx].accountNumber = e.target.value; setPayments(newP); }} placeholder="No. Rekening" className="bg-dark-900 border border-dark-700 rounded px-2 py-1 text-xs text-white" /><input value={pm.accountName || ''} onChange={e => { const newP = [...payments]; newP[idx].accountName = e.target.value; setPayments(newP); }} placeholder="Atas Nama" className="bg-dark-900 border border-dark-700 rounded px-2 py-1 text-xs text-white" /></div>)}
+                <div key={pm.id} className="bg-dark-900/50 p-4 rounded-lg border border-dark-700">
+                    <div className="flex justify-between items-center mb-4">
+                        <span className={`text-xs font-bold px-2 py-1 rounded uppercase ${pm.isActive ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}>{pm.type}</span>
+                        <label className="flex items-center gap-2 cursor-pointer"><span className="text-xs text-gray-400">{pm.isActive ? 'Aktif' : 'Non-Aktif'}</span><input type="checkbox" checked={pm.isActive !== false} onChange={e => { const newP = [...payments]; newP[idx].isActive = e.target.checked; setPayments(newP); }} className="accent-primary w-4 h-4" /></label>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="md:col-span-2">
+                            <label className="block text-xs text-gray-500 mb-1">Nama Tampilan</label>
+                            <input value={pm.name} onChange={e => { const newP = [...payments]; newP[idx].name = e.target.value; setPayments(newP); }} className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none transition-colors" placeholder="Contoh: Bank BCA" />
+                        </div>
+
+                        {(pm.type === 'BANK' || pm.type === 'E-WALLET' || pm.type === 'QRIS') && (
+                            <>
+                                <div>
+                                    <label className="block text-xs text-gray-500 mb-1">{pm.type === 'QRIS' ? 'URL Gambar / Konten QR' : 'Nomor Rekening / No. HP'}</label>
+                                    <input value={pm.accountNumber || ''} onChange={e => { const newP = [...payments]; newP[idx].accountNumber = e.target.value; setPayments(newP); }} className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" placeholder={pm.type === 'QRIS' ? 'https://...' : '0123...'} />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-gray-500 mb-1">Atas Nama</label>
+                                    <input value={pm.accountName || ''} onChange={e => { const newP = [...payments]; newP[idx].accountName = e.target.value; setPayments(newP); }} className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" placeholder="Nama Pemilik" />
+                                </div>
+                            </>
+                        )}
+
+                        <div className="md:col-span-2">
+                             <label className="block text-xs text-gray-500 mb-1">Deskripsi / Instruksi Transfer</label>
+                             <input value={pm.description || ''} onChange={e => { const newP = [...payments]; newP[idx].description = e.target.value; setPayments(newP); }} className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" placeholder="Contoh: Transfer dan kirim bukti..." />
+                        </div>
+                    </div>
                 </div>
             ))}
+            </div>
         </div>
         <button onClick={handleSave} className="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-3 rounded-xl">Simpan & Auto Sync</button>
       </div>
@@ -530,7 +559,7 @@ const AdminDatabase: React.FC = () => {
         const dbSettings = { id: 'settings_01', store_name: settings.storeName, address: settings.address, whatsapp: settings.whatsapp, email: settings.email, description: settings.description, logo_url: settings.logoUrl, tripay_api_key: settings.tripayApiKey, tripay_private_key: settings.tripayPrivateKey, tripay_merchant_code: settings.tripayMerchantCode, admin_username: settings.adminUsername, admin_password: settings.adminPassword };
         await supabase.from('store_settings').upsert(dbSettings);
         
-        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ id: p.id, type: p.type, name: p.name, account_number: p.accountNumber, account_name: p.accountName, description: p.description, logo: p.logo, is_active: p.isActive }));
+        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ id: p.id, type: p.type, name: p.name, account_number: p.accountNumber, account_name: p.accountName, description: p.description, logo: p.logo, is_active: p.is_active }));
         await supabase.from('payment_methods').upsert(dbPayments);
 
         alert("Upload Berhasil!");
@@ -967,7 +996,7 @@ export default function App() {
         setSaveNotification("Saving Settings...");
         const dbSettings = { id: 'settings_01', store_name: settings.storeName, address: settings.address, whatsapp: settings.whatsapp, email: settings.email, description: settings.description, logo_url: settings.logoUrl, tripay_api_key: settings.tripayApiKey, tripay_private_key: settings.tripayPrivateKey, tripay_merchant_code: settings.tripayMerchantCode, admin_username: settings.adminUsername, admin_password: settings.adminPassword };
         await supabase.from('store_settings').upsert(dbSettings);
-        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ id: p.id, type: p.type, name: p.name, account_number: p.accountNumber, account_name: p.accountName, description: p.description, logo: p.logo, is_active: p.isActive }));
+        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ id: p.id, type: p.type, name: p.name, account_number: p.accountNumber, account_name: p.accountName, description: p.description, logo: p.logo, is_active: p.is_active }));
         await supabase.from('payment_methods').upsert(dbPayments);
         setSaveNotification("Settings Saved!"); setTimeout(() => setSaveNotification(null), 2000);
         DataService.saveSettings(settings); DataService.savePayments(paymentMethods);
