@@ -466,12 +466,26 @@ const AdminAffiliates: React.FC = () => {
 const AdminSettings: React.FC = () => {
   const { settings, updateSettings, paymentMethods, updatePayments } = useAppContext();
   const [formData, setFormData] = useState(settings);
-  const [payments, setPayments] = useState(paymentMethods);
+  const [payments, setPayments] = useState<PaymentMethod[]>([]);
   
+  // Initialize internal state from context
   useEffect(() => { setFormData(settings); }, [settings]);
-  useEffect(() => { setPayments(paymentMethods); }, [paymentMethods]);
+  useEffect(() => { 
+      // Safe guard against null/undefined paymentMethods
+      if (paymentMethods && Array.isArray(paymentMethods)) {
+          setPayments(paymentMethods); 
+      }
+  }, [paymentMethods]);
 
   const handleSave = () => { updateSettings(formData); updatePayments(payments); };
+
+  const handleResetPayments = () => {
+      if (confirm("Reset metode pembayaran ke default? Data yang ada sekarang akan ditimpa.")) {
+          const defaults: PaymentMethod[] = DataService.getPayments(); // Will return DataService defaults if LocalStorage is cleared/key mismatch
+          setPayments(defaults);
+          updatePayments(defaults);
+      }
+  };
 
   return (
     <div className="p-6 pb-24 max-w-4xl mx-auto">
@@ -496,42 +510,88 @@ const AdminSettings: React.FC = () => {
         </div>
 
         <div className="bg-dark-800 p-6 rounded-xl border border-dark-700">
-            <h3 className="text-lg font-bold text-white mb-4 border-b border-dark-700 pb-2">Pengaturan Pembayaran</h3>
-            <div className="space-y-6">
-            {payments.map((pm, idx) => (
-                <div key={pm.id} className="bg-dark-900/50 p-4 rounded-lg border border-dark-700">
-                    <div className="flex justify-between items-center mb-4">
-                        <span className={`text-xs font-bold px-2 py-1 rounded uppercase ${pm.isActive ? 'bg-green-500/20 text-green-400' : 'bg-gray-700 text-gray-400'}`}>{pm.type}</span>
-                        <label className="flex items-center gap-2 cursor-pointer"><span className="text-xs text-gray-400">{pm.isActive ? 'Aktif' : 'Non-Aktif'}</span><input type="checkbox" checked={pm.isActive !== false} onChange={e => { const newP = [...payments]; newP[idx].isActive = e.target.checked; setPayments(newP); }} className="accent-primary w-4 h-4" /></label>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="md:col-span-2">
-                            <label className="block text-xs text-gray-500 mb-1">Nama Tampilan</label>
-                            <input value={pm.name} onChange={e => { const newP = [...payments]; newP[idx].name = e.target.value; setPayments(newP); }} className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none transition-colors" placeholder="Contoh: Bank BCA" />
-                        </div>
-
-                        {(pm.type === 'BANK' || pm.type === 'E-WALLET' || pm.type === 'QRIS') && (
-                            <>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">{pm.type === 'QRIS' ? 'URL Gambar / Konten QR' : 'Nomor Rekening / No. HP'}</label>
-                                    <input value={pm.accountNumber || ''} onChange={e => { const newP = [...payments]; newP[idx].accountNumber = e.target.value; setPayments(newP); }} className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" placeholder={pm.type === 'QRIS' ? 'https://...' : '0123...'} />
-                                </div>
-                                <div>
-                                    <label className="block text-xs text-gray-500 mb-1">Atas Nama</label>
-                                    <input value={pm.accountName || ''} onChange={e => { const newP = [...payments]; newP[idx].accountName = e.target.value; setPayments(newP); }} className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" placeholder="Nama Pemilik" />
-                                </div>
-                            </>
-                        )}
-
-                        <div className="md:col-span-2">
-                             <label className="block text-xs text-gray-500 mb-1">Deskripsi / Instruksi Transfer</label>
-                             <input value={pm.description || ''} onChange={e => { const newP = [...payments]; newP[idx].description = e.target.value; setPayments(newP); }} className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" placeholder="Contoh: Transfer dan kirim bukti..." />
-                        </div>
-                    </div>
-                </div>
-            ))}
+            <div className="flex justify-between items-center mb-4 border-b border-dark-700 pb-2">
+                <h3 className="text-lg font-bold text-white">Pengaturan Pembayaran</h3>
+                <button onClick={handleResetPayments} className="text-xs bg-red-500/10 text-red-400 px-3 py-1 rounded border border-red-500/20 hover:bg-red-500/20">Reset Default Payments</button>
             </div>
+            
+            {payments.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                    <p>Tidak ada metode pembayaran.</p>
+                    <p className="text-xs mt-2">Klik tombol "Reset Default Payments" diatas untuk memuat ulang.</p>
+                </div>
+            ) : (
+                <div className="space-y-6">
+                {payments.map((pm, idx) => (
+                    <div key={pm.id || idx} className="bg-dark-900/50 p-4 rounded-lg border border-dark-700 shadow-sm">
+                        <div className="flex justify-between items-center mb-4 bg-dark-800 p-2 rounded">
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-white">{pm.type}</span>
+                                {pm.name && <span className="text-gray-400 text-sm">- {pm.name}</span>}
+                            </div>
+                            <label className="flex items-center gap-2 cursor-pointer bg-dark-900 px-3 py-1 rounded border border-dark-600">
+                                <span className={`text-xs font-bold ${pm.isActive ? 'text-green-400' : 'text-gray-500'}`}>{pm.isActive ? 'AKTIF' : 'NON-AKTIF'}</span>
+                                <input 
+                                    type="checkbox" 
+                                    checked={!!pm.isActive} 
+                                    onChange={e => { 
+                                        const newP = [...payments]; 
+                                        newP[idx] = { ...newP[idx], isActive: e.target.checked };
+                                        setPayments(newP); 
+                                    }} 
+                                    className="accent-primary w-4 h-4" 
+                                />
+                            </label>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block text-xs text-gray-500 mb-1">Nama Tampilan (Bank/E-Wallet)</label>
+                                <input 
+                                    value={pm.name || ''} 
+                                    onChange={e => { const newP = [...payments]; newP[idx] = { ...newP[idx], name: e.target.value }; setPayments(newP); }} 
+                                    className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none transition-colors" 
+                                    placeholder="Contoh: Bank BCA" 
+                                />
+                            </div>
+
+                            {(pm.type === 'BANK' || pm.type === 'E-WALLET' || pm.type === 'QRIS') && (
+                                <>
+                                    <div>
+                                        <label className="block text-xs text-gray-500 mb-1">{pm.type === 'QRIS' ? 'URL Gambar / Konten QR' : 'Nomor Rekening / No. HP'}</label>
+                                        <input 
+                                            value={pm.accountNumber || ''} 
+                                            onChange={e => { const newP = [...payments]; newP[idx] = { ...newP[idx], accountNumber: e.target.value }; setPayments(newP); }} 
+                                            className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" 
+                                            placeholder={pm.type === 'QRIS' ? 'https://...' : '0123...'} 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-gray-500 mb-1">Atas Nama</label>
+                                        <input 
+                                            value={pm.accountName || ''} 
+                                            onChange={e => { const newP = [...payments]; newP[idx] = { ...newP[idx], accountName: e.target.value }; setPayments(newP); }} 
+                                            className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" 
+                                            placeholder="Nama Pemilik" 
+                                        />
+                                    </div>
+                                </>
+                            )}
+
+                            <div className="md:col-span-2">
+                                 <label className="block text-xs text-gray-500 mb-1">Deskripsi / Instruksi Transfer</label>
+                                 <input 
+                                    value={pm.description || ''} 
+                                    onChange={e => { const newP = [...payments]; newP[idx] = { ...newP[idx], description: e.target.value }; setPayments(newP); }} 
+                                    className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" 
+                                    placeholder="Contoh: Transfer dan kirim bukti..." 
+                                />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+                </div>
+            )}
         </div>
         <button onClick={handleSave} className="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-3 rounded-xl">Simpan & Auto Sync</button>
       </div>
@@ -559,7 +619,17 @@ const AdminDatabase: React.FC = () => {
         const dbSettings = { id: 'settings_01', store_name: settings.storeName, address: settings.address, whatsapp: settings.whatsapp, email: settings.email, description: settings.description, logo_url: settings.logoUrl, tripay_api_key: settings.tripayApiKey, tripay_private_key: settings.tripayPrivateKey, tripay_merchant_code: settings.tripayMerchantCode, admin_username: settings.adminUsername, admin_password: settings.adminPassword };
         await supabase.from('store_settings').upsert(dbSettings);
         
-        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ id: p.id, type: p.type, name: p.name, account_number: p.accountNumber, account_name: p.accountName, description: p.description, logo: p.logo, is_active: p.isActive }));
+        // Fix: Explicitly map isActive to is_active (boolean)
+        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ 
+            id: p.id, 
+            type: p.type, 
+            name: p.name, 
+            account_number: p.accountNumber, 
+            account_name: p.accountName, 
+            description: p.description, 
+            logo: p.logo, 
+            is_active: !!p.isActive // Ensure boolean
+        }));
         await supabase.from('payment_methods').upsert(dbPayments);
 
         alert("Upload Berhasil!");
@@ -645,6 +715,11 @@ const CustomerCart: React.FC = () => {
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
   const navigate = useNavigate();
 
+  // Filter active payment methods for customer view
+  const activePaymentMethods = useMemo(() => {
+      return (paymentMethods || []).filter(pm => pm.isActive);
+  }, [paymentMethods]);
+
   const subTotal = cart.reduce((sum, item) => sum + ((item.discountPrice || item.price) * item.quantity), 0);
   let discountAmount = 0;
   if (appliedVoucher) discountAmount = appliedVoucher.type === 'PERCENT' ? (subTotal * appliedVoucher.value) / 100 : appliedVoucher.value;
@@ -706,7 +781,6 @@ const CustomerCart: React.FC = () => {
   };
 
   if (cart.length === 0) return <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center"><i className="fas fa-shopping-cart text-6xl text-dark-700 mb-4"></i><h2 className="text-xl font-bold text-white mb-2">Keranjang Kosong</h2><Link to="/" className="text-primary">Kembali Belanja</Link></div>;
-  const selectedPaymentDetails = paymentMethods.find(p => p.id === selectedPayment);
 
   return (
     <div className="max-w-2xl mx-auto p-6 pb-24">
@@ -717,7 +791,24 @@ const CustomerCart: React.FC = () => {
         <div className="p-4 bg-dark-900 space-y-2"><div className="flex justify-between text-gray-400 text-sm"><span>Subtotal</span><span>Rp {subTotal.toLocaleString()}</span></div>{appliedVoucher && <div className="flex justify-between text-green-400 text-sm"><span>Diskon</span><span>-Rp {discountAmount.toLocaleString()}</span></div>}<div className="flex justify-between border-t border-dark-700 pt-2 mt-2"><span className="text-gray-300">Total</span><span className="text-xl font-bold text-white">Rp {total.toLocaleString()}</span></div></div>
       </div>
       <h2 className="text-lg font-bold text-white mb-3">Pilih Pembayaran</h2>
-      <div className="grid gap-3 mb-6">{paymentMethods.map(pm => (<div key={pm.id} onClick={() => setSelectedPayment(pm.id)} className={`cursor-pointer p-4 rounded-xl border flex items-center justify-between ${selectedPayment === pm.id ? 'bg-primary/20 border-primary' : 'bg-dark-800 border-dark-700'}`}><span className="font-medium text-white">{pm.name}</span>{selectedPayment === pm.id && <i className="fas fa-check-circle text-primary"></i>}</div>))}</div>
+      <div className="grid gap-3 mb-6">
+        {activePaymentMethods.length === 0 ? (
+            <div className="p-4 bg-dark-800 rounded-xl border border-red-500/20 text-red-400 text-sm text-center">Belum ada metode pembayaran yang tersedia.</div>
+        ) : (
+            activePaymentMethods.map(pm => (
+                <div key={pm.id} onClick={() => setSelectedPayment(pm.id)} className={`cursor-pointer p-4 rounded-xl border flex items-center justify-between transition-colors ${selectedPayment === pm.id ? 'bg-primary/20 border-primary' : 'bg-dark-800 border-dark-700 hover:bg-dark-700'}`}>
+                    <div className="flex items-center gap-3">
+                        {pm.logo && <img src={pm.logo} alt={pm.type} className="w-8 h-8 object-contain bg-white rounded p-0.5" />}
+                        <div>
+                            <span className="font-medium text-white block">{pm.name}</span>
+                            {pm.type === 'BANK' && <span className="text-xs text-gray-400">{pm.accountNumber}</span>}
+                        </div>
+                    </div>
+                    {selectedPayment === pm.id && <i className="fas fa-check-circle text-primary"></i>}
+                </div>
+            ))
+        )}
+      </div>
       <button onClick={handleCheckout} className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-xl"></i> Konfirmasi Pesanan</button>
     </div>
   );
@@ -951,7 +1042,16 @@ export default function App() {
           }
           const { data: payData } = await supabase.from('payment_methods').select('*');
           if (payData) {
-              const mappedPayments = payData.map((p: any) => ({ id: p.id, type: p.type, name: p.name, accountNumber: p.account_number, accountName: p.account_name, description: p.description, logo: p.logo, isActive: p.is_active }));
+              const mappedPayments = payData.map((p: any) => ({ 
+                  id: p.id, 
+                  type: p.type, 
+                  name: p.name, 
+                  accountNumber: p.account_number, 
+                  accountName: p.account_name, 
+                  description: p.description, 
+                  logo: p.logo, 
+                  isActive: !!p.is_active // FORCE BOOLEAN
+              }));
               setPaymentMethods(mappedPayments); DataService.savePayments(mappedPayments);
           }
           // Fetch Orders (New)
@@ -996,7 +1096,18 @@ export default function App() {
         setSaveNotification("Saving Settings...");
         const dbSettings = { id: 'settings_01', store_name: settings.storeName, address: settings.address, whatsapp: settings.whatsapp, email: settings.email, description: settings.description, logo_url: settings.logoUrl, tripay_api_key: settings.tripayApiKey, tripay_private_key: settings.tripayPrivateKey, tripay_merchant_code: settings.tripayMerchantCode, admin_username: settings.adminUsername, admin_password: settings.adminPassword };
         await supabase.from('store_settings').upsert(dbSettings);
-        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ id: p.id, type: p.type, name: p.name, account_number: p.accountNumber, account_name: p.accountName, description: p.description, logo: p.logo, is_active: p.isActive }));
+        
+        // Ensure boolean isActive
+        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ 
+            id: p.id, 
+            type: p.type, 
+            name: p.name, 
+            account_number: p.accountNumber, 
+            account_name: p.accountName, 
+            description: p.description, 
+            logo: p.logo, 
+            is_active: !!p.isActive 
+        }));
         await supabase.from('payment_methods').upsert(dbPayments);
         setSaveNotification("Settings Saved!"); setTimeout(() => setSaveNotification(null), 2000);
         DataService.saveSettings(settings); DataService.savePayments(paymentMethods);
