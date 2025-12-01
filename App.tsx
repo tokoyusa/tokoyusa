@@ -559,7 +559,7 @@ const AdminDatabase: React.FC = () => {
         const dbSettings = { id: 'settings_01', store_name: settings.storeName, address: settings.address, whatsapp: settings.whatsapp, email: settings.email, description: settings.description, logo_url: settings.logoUrl, tripay_api_key: settings.tripayApiKey, tripay_private_key: settings.tripayPrivateKey, tripay_merchant_code: settings.tripayMerchantCode, admin_username: settings.adminUsername, admin_password: settings.adminPassword };
         await supabase.from('store_settings').upsert(dbSettings);
         
-        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ id: p.id, type: p.type, name: p.name, account_number: p.accountNumber, account_name: p.accountName, description: p.description, logo: p.logo, is_active: p.is_active }));
+        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ id: p.id, type: p.type, name: p.name, account_number: p.accountNumber, account_name: p.accountName, description: p.description, logo: p.logo, is_active: p.isActive }));
         await supabase.from('payment_methods').upsert(dbPayments);
 
         alert("Upload Berhasil!");
@@ -951,7 +951,7 @@ export default function App() {
           }
           const { data: payData } = await supabase.from('payment_methods').select('*');
           if (payData) {
-              const mappedPayments = payData.map((p: any) => ({ id: p.id, type: p.type, name: p.name, accountNumber: p.account_number, accountName: p.account_name, description: p.description, logo: p.logo, is_active: p.is_active }));
+              const mappedPayments = payData.map((p: any) => ({ id: p.id, type: p.type, name: p.name, accountNumber: p.account_number, accountName: p.account_name, description: p.description, logo: p.logo, isActive: p.is_active }));
               setPaymentMethods(mappedPayments); DataService.savePayments(mappedPayments);
           }
           // Fetch Orders (New)
@@ -996,7 +996,7 @@ export default function App() {
         setSaveNotification("Saving Settings...");
         const dbSettings = { id: 'settings_01', store_name: settings.storeName, address: settings.address, whatsapp: settings.whatsapp, email: settings.email, description: settings.description, logo_url: settings.logoUrl, tripay_api_key: settings.tripayApiKey, tripay_private_key: settings.tripayPrivateKey, tripay_merchant_code: settings.tripayMerchantCode, admin_username: settings.adminUsername, admin_password: settings.adminPassword };
         await supabase.from('store_settings').upsert(dbSettings);
-        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ id: p.id, type: p.type, name: p.name, account_number: p.accountNumber, account_name: p.accountName, description: p.description, logo: p.logo, is_active: p.is_active }));
+        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ id: p.id, type: p.type, name: p.name, account_number: p.accountNumber, account_name: p.accountName, description: p.description, logo: p.logo, is_active: p.isActive }));
         await supabase.from('payment_methods').upsert(dbPayments);
         setSaveNotification("Settings Saved!"); setTimeout(() => setSaveNotification(null), 2000);
         DataService.saveSettings(settings); DataService.savePayments(paymentMethods);
