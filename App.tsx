@@ -250,7 +250,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Dashboard <span className="text-xs text-green-400 font-mono font-normal ml-2 bg-green-900/30 px-2 py-1 rounded border border-green-500/30">v3.1 (Live Fix Final)</span></h2>
+          <h2 className="text-2xl font-bold text-white">Dashboard <span className="text-xs text-green-400 font-mono font-normal ml-2 bg-green-900/30 px-2 py-1 rounded border border-green-500/30">v3.3 (Final Clean)</span></h2>
           <div className={`px-3 py-1 rounded-full text-xs font-bold border ${isCloudConnected ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-gray-500/10 text-gray-400 border-gray-500/30'}`}>
               {isCloudConnected ? '● Cloud Connected' : '○ Local Mode'}
           </div>
@@ -532,6 +532,7 @@ const AdminSettings: React.FC = () => {
                         <div className="flex justify-between items-center mb-4 bg-dark-800 p-2 rounded">
                             <div className="flex items-center gap-2">
                                 <span className="font-bold text-white">{pm.type}</span>
+                                <span className="text-[10px] text-gray-600 bg-gray-800 px-1 rounded border border-gray-700">Type: {pType}</span>
                                 {pm.name && <span className="text-gray-400 text-sm">- {pm.name}</span>}
                             </div>
                             <label className="flex items-center gap-2 cursor-pointer bg-dark-900 px-3 py-1 rounded border border-dark-600">
