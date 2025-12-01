@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
@@ -251,7 +250,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Dashboard <span className="text-xs text-gray-500 font-normal ml-2">v2.0 (Live Fix)</span></h2>
+          <h2 className="text-2xl font-bold text-white">Dashboard <span className="text-xs text-green-400 font-mono font-normal ml-2 bg-green-900/30 px-2 py-1 rounded border border-green-500/30">v3.0 (Payment Input Fix)</span></h2>
           <div className={`px-3 py-1 rounded-full text-xs font-bold border ${isCloudConnected ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-gray-500/10 text-gray-400 border-gray-500/30'}`}>
               {isCloudConnected ? '● Cloud Connected' : '○ Local Mode'}
           </div>
@@ -526,7 +525,6 @@ const AdminSettings: React.FC = () => {
                     // Normalize type for safe checking
                     const pType = pm.type ? pm.type.toUpperCase().trim() : 'BANK'; 
                     // CRITICAL FIX: Show manual inputs for EVERYTHING except TRIPAY.
-                    // This prevents fields from hiding if Supabase has weird data like "Bank" (mixed case) or "DANA".
                     const isManual = pType !== 'TRIPAY'; 
 
                     return (
