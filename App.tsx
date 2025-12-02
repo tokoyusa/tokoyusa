@@ -1,145 +1,10 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Product, StoreSettings, CartItem, PaymentMethod, User, Voucher, Affiliate, Order, Customer } from './types';
 import { DataService } from './services/dataService';
 import AdminSidebar from './components/AdminSidebar';
-
-// --- Constants ---
-
-const SUPABASE_SCHEMA = `-- Enable UUID extension
-create extension if not exists "uuid-ossp";
-
--- !!! RESET TABLES & POLICIES !!! 
-do $$ 
-begin
-  drop policy if exists "Public Access Products" on products;
-  drop policy if exists "Public Access Settings" on store_settings;
-  drop policy if exists "Public Access Payments" on payment_methods;
-  drop policy if exists "Public Access Vouchers" on vouchers;
-  drop policy if exists "Public Access Affiliates" on affiliates;
-  drop policy if exists "Public Access Orders" on orders;
-  drop policy if exists "Public Access Customers" on customers;
-exception when undefined_table then 
-  -- Do nothing
-end $$;
-
-drop table if exists products cascade;
-drop table if exists store_settings cascade;
-drop table if exists payment_methods cascade;
-drop table if exists vouchers cascade;
-drop table if exists affiliates cascade;
-drop table if exists orders cascade;
-drop table if exists customers cascade;
-
--- Create Products Table
-create table products (
-  id text primary key,
-  name text not null,
-  category text,
-  description text,
-  price numeric not null,
-  discount_price numeric,
-  image text,
-  file_url text,
-  is_popular boolean default false,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Create Store Settings Table
-create table store_settings (
-  id text primary key,
-  store_name text,
-  address text,
-  whatsapp text,
-  email text,
-  description text,
-  logo_url text,
-  tripay_api_key text,
-  tripay_private_key text,
-  tripay_merchant_code text,
-  admin_username text,
-  admin_password text,
-  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Create Payment Methods Table
-create table payment_methods (
-  id text primary key,
-  type text not null,
-  name text not null,
-  account_number text,
-  account_name text,
-  description text,
-  logo text,
-  is_active boolean default true,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Create Vouchers Table
-create table vouchers (
-  id text primary key,
-  code text not null unique,
-  type text not null check (type in ('FIXED', 'PERCENT')),
-  value numeric not null,
-  is_active boolean default true,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Create Affiliates Table
-create table affiliates (
-  id text primary key,
-  name text not null,
-  code text not null unique,
-  password text not null,
-  commission_rate numeric not null,
-  total_earnings numeric default 0,
-  bank_details text,
-  is_active boolean default true,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Create Customers Table
-create table customers (
-  id text primary key,
-  name text not null,
-  whatsapp text not null unique,
-  password text not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Create Orders Table
-create table orders (
-  id text primary key,
-  customer_name text,
-  customer_whatsapp text,
-  total numeric not null,
-  payment_method text,
-  status text default 'PENDING',
-  items jsonb,
-  voucher_code text,
-  discount_amount numeric,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- Enable RLS
-alter table products enable row level security;
-alter table store_settings enable row level security;
-alter table payment_methods enable row level security;
-alter table vouchers enable row level security;
-alter table affiliates enable row level security;
-alter table orders enable row level security;
-alter table customers enable row level security;
-
--- Create Policies (Open access for simplicity in this demo)
-create policy "Public Access Products" on products for all using (true) with check (true);
-create policy "Public Access Settings" on store_settings for all using (true) with check (true);
-create policy "Public Access Payments" on payment_methods for all using (true) with check (true);
-create policy "Public Access Vouchers" on vouchers for all using (true) with check (true);
-create policy "Public Access Affiliates" on affiliates for all using (true) with check (true);
-create policy "Public Access Orders" on orders for all using (true) with check (true);
-create policy "Public Access Customers" on customers for all using (true) with check (true);
-`;
 
 // --- Helpers ---
 function generateUUID() {
@@ -250,7 +115,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Dashboard <span className="text-xs text-green-400 font-mono font-normal ml-2 bg-green-900/30 px-2 py-1 rounded border border-green-500/30">v5.2 (Clean Build)</span></h2>
+          <h2 className="text-2xl font-bold text-white">Dashboard <span className="text-xs text-yellow-400 font-mono font-normal ml-2 bg-yellow-900/30 px-2 py-1 rounded border border-yellow-500/30">v6.0 (UI DEBUG)</span></h2>
           <div className={`px-3 py-1 rounded-full text-xs font-bold border ${isCloudConnected ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-gray-500/10 text-gray-400 border-gray-500/30'}`}>
               {isCloudConnected ? '● Cloud Connected' : '○ Local Mode'}
           </div>
@@ -259,8 +124,6 @@ const AdminDashboard: React.FC = () => {
       {fetchError && (
           <div className="bg-red-500/10 border border-red-500/30 p-4 rounded-lg mb-6 text-red-400 text-sm">
               <strong>Connection Error:</strong> {fetchError}
-              <br/>
-              Saran: Masuk ke menu "Database & API" dan jalankan ulang SQL Schema.
           </div>
       )}
 
@@ -511,7 +374,7 @@ const AdminSettings: React.FC = () => {
 
         <div className="bg-dark-800 p-6 rounded-xl border border-dark-700">
            <div className="flex justify-between items-center mb-4 border-b border-dark-700 pb-2">
-               <h3 className="text-lg font-bold text-white">Metode Pembayaran</h3>
+               <h3 className="text-lg font-bold text-white">Metode Pembayaran (v6.0)</h3>
                <button onClick={handleResetPayments} className="text-xs bg-red-500/10 text-red-400 px-2 py-1 rounded hover:bg-red-500/20">Reset Default Payments</button>
            </div>
            
@@ -548,40 +411,38 @@ const AdminSettings: React.FC = () => {
                              </button>
                         </div>
 
-                        {/* Force Show Inputs for Everything except Tripay automated settings logic */}
-                        {!isTripay && (
-                             <div className="grid grid-cols-2 gap-2 mt-2">
-                                <div>
-                                    <label className="text-[10px] text-gray-500">Nomor Rekening / No. HP</label>
-                                    <input 
-                                        type="text" 
-                                        value={method.accountNumber || ''} 
-                                        onChange={(e) => {
-                                            const newP = [...payments];
-                                            newP[index].accountNumber = e.target.value;
-                                            setPayments(newP);
-                                        }}
-                                        className="w-full bg-dark-800 border border-dark-700 rounded px-2 py-1 text-xs text-white"
-                                        placeholder="Contoh: 1234567890"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-gray-500">Atas Nama</label>
-                                    <input 
-                                        type="text" 
-                                        value={method.accountName || ''} 
-                                        onChange={(e) => {
-                                            const newP = [...payments];
-                                            newP[index].accountName = e.target.value;
-                                            setPayments(newP);
-                                        }}
-                                        className="w-full bg-dark-800 border border-dark-700 rounded px-2 py-1 text-xs text-white"
-                                        placeholder="Contoh: A.N Admin"
-                                    />
-                                </div>
-                             </div>
-                        )}
-                        {/* Description field for all */}
+                        {/* INPUTS FORCED TO RENDER ALWAYS - NO HIDING LOGIC */}
+                         <div className="grid grid-cols-2 gap-2 mt-2 p-2 bg-gray-900/50 rounded">
+                            <div>
+                                <label className="text-[10px] text-gray-400 block mb-1">Nomor Rekening / No. HP</label>
+                                <input 
+                                    type="text" 
+                                    value={method.accountNumber || ''} 
+                                    onChange={(e) => {
+                                        const newP = [...payments];
+                                        newP[index].accountNumber = e.target.value;
+                                        setPayments(newP);
+                                    }}
+                                    className="w-full bg-white text-black border border-gray-300 rounded px-2 py-1 text-xs font-semibold"
+                                    placeholder="Isi Disini..."
+                                />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-gray-400 block mb-1">Atas Nama</label>
+                                <input 
+                                    type="text" 
+                                    value={method.accountName || ''} 
+                                    onChange={(e) => {
+                                        const newP = [...payments];
+                                        newP[index].accountName = e.target.value;
+                                        setPayments(newP);
+                                    }}
+                                    className="w-full bg-white text-black border border-gray-300 rounded px-2 py-1 text-xs font-semibold"
+                                    placeholder="Isi Disini..."
+                                />
+                            </div>
+                         </div>
+                        
                         <div className="mt-2">
                              <label className="text-[10px] text-gray-500">Deskripsi / Catatan</label>
                              <input 
@@ -644,6 +505,55 @@ const AdminDatabase: React.FC = () => {
         }
     };
   
+    const SUPABASE_SCHEMA = `-- Enable UUID extension
+create extension if not exists "uuid-ossp";
+
+do $$ 
+begin
+  drop policy if exists "Public Access Products" on products;
+  drop policy if exists "Public Access Settings" on store_settings;
+  drop policy if exists "Public Access Payments" on payment_methods;
+  drop policy if exists "Public Access Vouchers" on vouchers;
+  drop policy if exists "Public Access Affiliates" on affiliates;
+  drop policy if exists "Public Access Orders" on orders;
+  drop policy if exists "Public Access Customers" on customers;
+exception when undefined_table then 
+  -- Do nothing
+end $$;
+
+drop table if exists products cascade;
+drop table if exists store_settings cascade;
+drop table if exists payment_methods cascade;
+drop table if exists vouchers cascade;
+drop table if exists affiliates cascade;
+drop table if exists orders cascade;
+drop table if exists customers cascade;
+
+create table products (id text primary key, name text, category text, description text, price numeric, discount_price numeric, image text, file_url text, is_popular boolean default false, created_at timestamp with time zone default timezone('utc'::text, now()));
+create table store_settings (id text primary key, store_name text, address text, whatsapp text, email text, description text, logo_url text, tripay_api_key text, tripay_private_key text, tripay_merchant_code text, admin_username text, admin_password text, updated_at timestamp with time zone default timezone('utc'::text, now()));
+create table payment_methods (id text primary key, type text, name text, account_number text, account_name text, description text, logo text, is_active boolean default true, created_at timestamp with time zone default timezone('utc'::text, now()));
+create table vouchers (id text primary key, code text unique, type text, value numeric, is_active boolean default true, created_at timestamp with time zone default timezone('utc'::text, now()));
+create table affiliates (id text primary key, name text, code text unique, password text, commission_rate numeric, total_earnings numeric default 0, bank_details text, is_active boolean default true, created_at timestamp with time zone default timezone('utc'::text, now()));
+create table customers (id text primary key, name text, whatsapp text unique, password text, created_at timestamp with time zone default timezone('utc'::text, now()));
+create table orders (id text primary key, customer_name text, customer_whatsapp text, total numeric, payment_method text, status text default 'PENDING', items jsonb, voucher_code text, discount_amount numeric, created_at timestamp with time zone default timezone('utc'::text, now()));
+
+alter table products enable row level security;
+alter table store_settings enable row level security;
+alter table payment_methods enable row level security;
+alter table vouchers enable row level security;
+alter table affiliates enable row level security;
+alter table orders enable row level security;
+alter table customers enable row level security;
+
+create policy "Public Access Products" on products for all using (true) with check (true);
+create policy "Public Access Settings" on store_settings for all using (true) with check (true);
+create policy "Public Access Payments" on payment_methods for all using (true) with check (true);
+create policy "Public Access Vouchers" on vouchers for all using (true) with check (true);
+create policy "Public Access Affiliates" on affiliates for all using (true) with check (true);
+create policy "Public Access Orders" on orders for all using (true) with check (true);
+create policy "Public Access Customers" on customers for all using (true) with check (true);
+`;
+
     return (
       <div className="p-6">
         <h2 className="text-2xl font-bold text-white mb-6">Database & API</h2>
