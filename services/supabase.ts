@@ -5,6 +5,17 @@ import { SupabaseConfig } from '../types';
 const CONFIG_KEY = 'digitalstore_supabase_config';
 
 export const getStoredConfig = (): SupabaseConfig | null => {
+  // 1. Check Environment Variables first (For Vercel Production)
+  // Cast import.meta to any to avoid TS error: Property 'env' does not exist on type 'ImportMeta'
+  const env = (import.meta as any).env;
+  const envUrl = env?.VITE_SUPABASE_URL;
+  const envKey = env?.VITE_SUPABASE_ANON_KEY;
+
+  if (envUrl && envKey) {
+     return { url: envUrl, anonKey: envKey };
+  }
+
+  // 2. Check Local Storage (For Manual Setup)
   const stored = localStorage.getItem(CONFIG_KEY);
   return stored ? JSON.parse(stored) : null;
 };

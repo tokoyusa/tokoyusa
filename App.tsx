@@ -32,7 +32,9 @@ const App: React.FC = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [settings, setSettings] = useState<StoreSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
-  const [dbConfigured, setDbConfigured] = useState(false);
+  
+  // Check config synchronously on init to avoid flash of SetupPage
+  const [dbConfigured, setDbConfigured] = useState(() => !!getStoredConfig());
 
   // Separate session check logic
   const checkSession = async () => {
@@ -40,7 +42,7 @@ const App: React.FC = () => {
       const supabase = getSupabase();
       if (!supabase) {
         // If config exists but client fails, likely invalid config
-        // Verify if config exists in storage
+        // Verify if config exists in storage or env
         if (!getStoredConfig()) {
            setDbConfigured(false);
         }
@@ -168,10 +170,12 @@ const App: React.FC = () => {
     // Effect will trigger checkSession
   };
 
+  // If DB is not configured, show Setup Page
   if (!dbConfigured) {
     return <SetupPage onConfigured={handleConfigured} />;
   }
 
+  // Show loading spinner checking session
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-primary">
