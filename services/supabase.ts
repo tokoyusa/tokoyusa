@@ -126,6 +126,7 @@ alter table public.orders enable row level security;
 create policy "Users can view own orders." on public.orders for select using (auth.uid() = user_id);
 create policy "Admins can view all orders." on public.orders for select using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 create policy "Users can insert orders." on public.orders for insert with check (auth.uid() = user_id);
+create policy "Admins can update orders" on public.orders for update using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
 alter table public.settings enable row level security;
 create policy "Settings viewable by everyone" on public.settings for select using (true);

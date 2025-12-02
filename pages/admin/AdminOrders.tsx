@@ -3,11 +3,12 @@ import React, { useEffect, useState } from 'react';
 import { getSupabase } from '../../services/supabase';
 import { Order } from '../../types';
 import { formatRupiah } from '../../services/helpers';
-import { ClipboardList, Filter, ChevronDown, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { ClipboardList, Filter, ChevronDown, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
 
 const AdminOrders: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [filter, setFilter] = useState('all');
 
   const supabase = getSupabase();
@@ -34,11 +35,25 @@ const AdminOrders: React.FC = () => {
 
   const updateStatus = async (orderId: string, newStatus: string) => {
      if (!supabase) return;
-     const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', orderId);
-     if (!error) {
+     setUpdatingId(orderId);
+     
+     // Gunakan .select() untuk memastikan data benar-benar terupdate dan dikembalikan oleh DB
+     const { data, error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId)
+        .select();
+     
+     setUpdatingId(null);
+
+     if (!error && data && data.length > 0) {
+        // Update local state hanya jika sukses
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus as any } : o));
      } else {
-        alert("Gagal update status: " + error.message);
+        console.error("Update error:", error);
+        alert("Gagal update status. Pastikan Anda sudah menjalankan SQL Policy 'Admins can update orders' di Supabase.");
+        // Refresh data untuk mengembalikan status asli di UI
+        fetchOrders();
      }
   };
 
@@ -126,18 +141,26 @@ const AdminOrders: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-4">
-                       <div className="relative group">
-                          <select 
-                            className="bg-slate-900 border border-slate-600 text-xs rounded p-2 outline-none hover:border-primary transition-colors cursor-pointer appearance-none pr-8"
-                            value={order.status}
-                            onChange={(e) => updateStatus(order.id, e.target.value)}
-                          >
-                             <option value="pending">Pending</option>
-                             <option value="processing">Proses</option>
-                             <option value="completed">Selesai</option>
-                             <option value="cancelled">Cancel</option>
-                          </select>
-                          <ChevronDown size={14} className="absolute right-2 top-2.5 text-slate-400 pointer-events-none" />
+                       <div className="relative group min-w-[120px]">
+                          {updatingId === order.id ? (
+                            <div className="flex items-center text-xs text-slate-400 gap-1">
+                               <Loader2 size={14} className="animate-spin" /> Updating...
+                            </div>
+                          ) : (
+                             <>
+                              <select 
+                                className="w-full bg-slate-900 border border-slate-600 text-xs rounded p-2 outline-none hover:border-primary transition-colors cursor-pointer appearance-none pr-8"
+                                value={order.status}
+                                onChange={(e) => updateStatus(order.id, e.target.value)}
+                              >
+                                 <option value="pending">Pending</option>
+                                 <option value="processing">Proses</option>
+                                 <option value="completed">Selesai</option>
+                                 <option value="cancelled">Cancel</option>
+                              </select>
+                              <ChevronDown size={14} className="absolute right-2 top-2.5 text-slate-400 pointer-events-none" />
+                             </>
+                          )}
                        </div>
                     </td>
                   </tr>
