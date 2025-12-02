@@ -36,11 +36,15 @@ export interface Order {
   id: string;
   user_id: string;
   total_amount: number;
-  status: 'pending' | 'paid' | 'failed' | 'completed';
+  status: 'pending' | 'processing' | 'completed' | 'cancelled';
   payment_method: string;
   payment_proof?: string;
   items: OrderItem[];
   created_at: string;
+  profiles?: {
+    full_name: string;
+    email: string;
+  };
 }
 
 export interface OrderItem {
@@ -48,6 +52,7 @@ export interface OrderItem {
   product_id: string;
   product_name: string;
   price: number;
+  file_url?: string; // Stored at time of purchase
 }
 
 export interface StoreSettings {

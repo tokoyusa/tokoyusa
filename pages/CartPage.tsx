@@ -20,6 +20,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('TRANSFER');
   const [processing, setProcessing] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
+  const [lastOrderTotal, setLastOrderTotal] = useState(0); // Store total for success message
   const navigate = useNavigate();
 
   const total = cart.reduce((acc, item) => acc + (item.discount_price || item.price) * item.quantity, 0);
@@ -41,7 +42,6 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
       const commissionAmount = Math.floor(orderTotal * (settings.affiliate_commission_rate / 100));
       if (commissionAmount > 0) {
         // 2. Call the Secure RPC function to update balance
-        // We use RPC to avoid RLS issues where User A tries to update User B's row
         const { error } = await supabase.rpc('increment_balance', { 
            user_id: referrer.id, 
            amount: commissionAmount 
@@ -49,8 +49,6 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
         
         if (error) {
            console.error("Failed to add commission", error);
-        } else {
-           console.log(`Commission of ${commissionAmount} added to ${referrer.id}`);
         }
       }
     }
@@ -67,6 +65,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     const supabase = getSupabase();
     
     // Create Order
+    // Note: Items saved here include file_url from Product (via CartItem extension)
     const { data: order, error } = await supabase!
       .from('orders')
       .insert({
@@ -88,6 +87,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     // Process Affiliate Commission (Fire and Forget)
     await processAffiliateCommission(total);
 
+    setLastOrderTotal(total);
     setOrderSuccess(order.id);
     clearCart();
     setProcessing(false);
@@ -95,12 +95,11 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
   const handleConfirmWA = () => {
     if (!orderSuccess) return;
-    const msg = `Halo Admin, saya sudah melakukan pesanan dengan ID: ${orderSuccess.slice(0, 8)}. Mohon diproses. Total: ${formatRupiah(total)}. Metode: ${selectedMethod}`;
+    const msg = `Halo Admin, saya sudah melakukan pesanan dengan ID: ${orderSuccess.slice(0, 8)}. Mohon diproses.\nTotal: ${formatRupiah(lastOrderTotal)}\nMetode: ${selectedMethod}`;
     window.open(generateWhatsAppLink(settings.whatsapp_number, msg), '_blank');
   };
 
   const handleTripay = () => {
-     // Mock Tripay Redirect
      alert("Redirecting to Tripay (Simulation)... In production this would open the Tripay payment URL.");
   };
 
@@ -113,6 +112,10 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
         
         <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 max-w-md w-full mb-6 text-left">
            <h3 className="font-bold text-lg mb-4 border-b border-slate-700 pb-2">Instruksi Pembayaran</h3>
+           <div className="mb-4 text-center">
+              <span className="text-slate-400">Total yang harus dibayar:</span>
+              <p className="text-2xl font-bold text-white">{formatRupiah(lastOrderTotal)}</p>
+           </div>
            
            {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
              <div className="space-y-4">
@@ -152,7 +155,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                {settings.qris_url ? (
                  <img src={settings.qris_url} alt="QRIS" className="w-48 h-48 rounded bg-white" />
                ) : (
-                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=Transfer ${total} to Store`} alt="QRIS" className="w-48 h-48 rounded" />
+                 <img src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=Transfer ${lastOrderTotal} to Store`} alt="QRIS" className="w-48 h-48 rounded" />
                )}
              </div>
            )}

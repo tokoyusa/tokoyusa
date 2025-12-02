@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { UserProfile, Order } from '../types';
 import { getSupabase } from '../services/supabase';
 import { formatRupiah, generateAffiliateCode, generateWhatsAppLink } from '../services/helpers';
-import { User, Copy, ShoppingBag, CreditCard, Gift, Save, LogOut } from 'lucide-react';
+import { User, Copy, ShoppingBag, CreditCard, Gift, Save, LogOut, Download, FileText } from 'lucide-react';
 
 interface ProfilePageProps {
   user: UserProfile;
@@ -105,6 +105,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
      } else {
         alert("Anda bukan user tunggal di database, tidak bisa auto-claim admin.");
      }
+  };
+
+  const getStatusLabel = (status: string) => {
+      switch(status) {
+          case 'completed': return 'Selesai';
+          case 'processing': return 'Proses';
+          case 'cancelled': return 'Cancel';
+          default: return 'Pending';
+      }
   };
 
   return (
@@ -219,26 +228,44 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
               <p className="text-slate-500 text-center py-8">Belum ada pesanan.</p>
             ) : (
               orders.map(order => (
-                <div key={order.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                       <span className="font-mono text-xs bg-slate-900 px-2 py-1 rounded text-slate-400">#{order.id.slice(0,8)}</span>
-                       <span className={`text-xs px-2 py-0.5 rounded uppercase font-bold ${
-                         order.status === 'completed' ? 'bg-green-500/20 text-green-500' : 
-                         order.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-red-500/20 text-red-500'
-                       }`}>{order.status}</span>
+                <div key={order.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 pb-4 border-b border-slate-700">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                         <span className="font-mono text-xs bg-slate-900 px-2 py-1 rounded text-slate-400">#{order.id.slice(0,8)}</span>
+                         <span className={`text-xs px-2 py-0.5 rounded uppercase font-bold ${
+                           order.status === 'completed' ? 'bg-green-500/20 text-green-500' : 
+                           order.status === 'processing' ? 'bg-blue-500/20 text-blue-500' : 
+                           order.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-red-500/20 text-red-500'
+                         }`}>{getStatusLabel(order.status)}</span>
+                      </div>
+                      <p className="text-xs text-slate-400">{new Date(order.created_at).toLocaleDateString()}</p>
                     </div>
-                    <p className="font-bold text-white">{formatRupiah(order.total_amount)}</p>
-                    <p className="text-xs text-slate-400">{new Date(order.created_at).toLocaleDateString()}</p>
+                    <p className="font-bold text-white text-lg">{formatRupiah(order.total_amount)}</p>
                   </div>
-                  {order.status === 'completed' && (
-                    <button 
-                       className="px-4 py-2 bg-primary/20 text-primary rounded-lg text-sm hover:bg-primary/30"
-                       onClick={() => alert("Menuju link download produk... (Mock)")}
-                    >
-                      Download Produk
-                    </button>
-                  )}
+
+                  <div className="space-y-2">
+                     {order.items && order.items.map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center bg-slate-900/50 p-2 rounded">
+                           <div className="flex items-center gap-2">
+                              <FileText size={16} className="text-slate-500" />
+                              <span className="text-sm text-slate-300">{item.product_name}</span>
+                           </div>
+                           
+                           {/* DOWNLOAD BUTTON: Only show if order is completed and file_url exists */}
+                           {order.status === 'completed' && item.file_url ? (
+                              <a 
+                                href={item.file_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-xs bg-primary hover:bg-blue-600 text-white px-3 py-1.5 rounded transition-colors"
+                              >
+                                 <Download size={12} /> Download
+                              </a>
+                           ) : null}
+                        </div>
+                     ))}
+                  </div>
                 </div>
               ))
             )}

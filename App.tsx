@@ -13,6 +13,7 @@ import ProfilePage from './pages/ProfilePage';
 import AuthPage from './pages/AuthPage';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminProducts from './pages/admin/AdminProducts';
+import AdminOrders from './pages/admin/AdminOrders';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminAffiliates from './pages/admin/AdminAffiliates';
 import SetupPage from './pages/SetupPage';
@@ -219,6 +220,7 @@ const App: React.FC = () => {
           
           {/* Admin Routes */}
           <Route path="/admin/dashboard" element={user?.role === UserRole.ADMIN ? <AdminDashboard /> : <Navigate to="/" />} />
+          <Route path="/admin/orders" element={user?.role === UserRole.ADMIN ? <AdminOrders /> : <Navigate to="/" />} />
           <Route path="/admin/products" element={user?.role === UserRole.ADMIN ? <AdminProducts /> : <Navigate to="/" />} />
           <Route path="/admin/settings" element={user?.role === UserRole.ADMIN ? <AdminSettings settings={settings} onUpdate={updateSettings} /> : <Navigate to="/" />} />
           <Route path="/admin/affiliates" element={user?.role === UserRole.ADMIN ? <AdminAffiliates /> : <Navigate to="/" />} />
