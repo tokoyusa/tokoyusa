@@ -65,6 +65,11 @@ export interface StoreSettings {
     number: string;
     name: string;
   }[];
+  e_wallets: {
+    provider: 'DANA' | 'OVO' | 'GOPAY' | 'SHOPEEPAY' | 'LINKAJA';
+    number: string;
+    name: string;
+  }[];
   qris_url?: string; // Generated or uploaded QRIS image URL
 }
 

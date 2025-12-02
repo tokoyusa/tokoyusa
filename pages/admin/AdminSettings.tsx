@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { StoreSettings } from '../../types';
-import { Save, RefreshCw, Upload, Loader2, Image as ImageIcon } from 'lucide-react';
+import { Save, RefreshCw, Upload, Loader2, Image as ImageIcon, Wallet } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getSupabase } from '../../services/supabase';
 
@@ -11,7 +11,10 @@ interface AdminSettingsProps {
 }
 
 const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => {
-  const [localSettings, setLocalSettings] = useState<StoreSettings>(settings);
+  const [localSettings, setLocalSettings] = useState<StoreSettings>({
+      ...settings,
+      e_wallets: settings.e_wallets || [] // Ensure it exists
+  });
   const [uploading, setUploading] = useState(false);
   const navigate = useNavigate();
   const supabase = getSupabase();
@@ -24,6 +27,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
      setLocalSettings({ ...localSettings, [key]: parseFloat(e.target.value) || 0 });
   };
 
+  // --- Bank Helpers ---
   const handleBankChange = (index: number, field: string, value: string) => {
     const newBanks = [...localSettings.bank_accounts];
     newBanks[index] = { ...newBanks[index], [field]: value };
@@ -40,6 +44,25 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
   const removeBank = (index: number) => {
     const newBanks = localSettings.bank_accounts.filter((_, i) => i !== index);
     setLocalSettings({ ...localSettings, bank_accounts: newBanks });
+  };
+
+  // --- E-Wallet Helpers ---
+  const handleWalletChange = (index: number, field: string, value: string) => {
+    const newWallets = [...localSettings.e_wallets];
+    newWallets[index] = { ...newWallets[index], [field]: value };
+    setLocalSettings({ ...localSettings, e_wallets: newWallets });
+  };
+
+  const addWallet = () => {
+    setLocalSettings({
+      ...localSettings,
+      e_wallets: [...localSettings.e_wallets, { provider: 'DANA', number: '', name: '' }]
+    });
+  };
+
+  const removeWallet = (index: number) => {
+    const newWallets = localSettings.e_wallets.filter((_, i) => i !== index);
+    setLocalSettings({ ...localSettings, e_wallets: newWallets });
   };
 
   const saveAll = () => {
@@ -177,22 +200,61 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
           </div>
         </div>
 
-        {/* Payment Banks */}
-        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-700 pb-2">
-             <h2 className="text-lg font-bold">Rekening Bank Manual</h2>
-             <button onClick={addBank} className="text-xs bg-slate-700 px-2 py-1 rounded hover:bg-slate-600">Tambah</button>
+        {/* Payment Methods */}
+        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-6">
+          {/* BANK ACCOUNTS */}
+          <div>
+            <div className="flex justify-between items-center border-b border-slate-700 pb-2 mb-4">
+               <h2 className="text-lg font-bold">Rekening Bank Manual</h2>
+               <button onClick={addBank} className="text-xs bg-slate-700 px-2 py-1 rounded hover:bg-slate-600">Tambah</button>
+            </div>
+            
+            <div className="space-y-3">
+              {localSettings.bank_accounts.map((bank, i) => (
+                <div key={i} className="bg-slate-900 p-3 rounded flex flex-col gap-2 relative group border border-slate-800">
+                   <button onClick={() => removeBank(i)} className="absolute top-2 right-2 text-red-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-slate-800 p-1 rounded">Hapus</button>
+                   <input placeholder="Nama Bank (BCA/BRI)" className="bg-transparent border-b border-slate-700 p-1 focus:border-primary outline-none" value={bank.bank} onChange={(e) => handleBankChange(i, 'bank', e.target.value)} />
+                   <input placeholder="Nomor Rekening" className="bg-transparent border-b border-slate-700 p-1 focus:border-primary outline-none" value={bank.number} onChange={(e) => handleBankChange(i, 'number', e.target.value)} />
+                   <input placeholder="Atas Nama" className="bg-transparent border-b border-slate-700 p-1 focus:border-primary outline-none" value={bank.name} onChange={(e) => handleBankChange(i, 'name', e.target.value)} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* E-WALLETS */}
+          <div>
+            <div className="flex justify-between items-center border-b border-slate-700 pb-2 mb-4">
+               <h2 className="text-lg font-bold flex items-center gap-2"><Wallet size={18}/> Pengaturan E-Wallet</h2>
+               <button onClick={addWallet} className="text-xs bg-slate-700 px-2 py-1 rounded hover:bg-slate-600">Tambah</button>
+            </div>
+            
+            <div className="space-y-3">
+              {localSettings.e_wallets.map((wallet, i) => (
+                <div key={i} className="bg-slate-900 p-3 rounded flex flex-col gap-2 relative group border border-slate-800">
+                   <button onClick={() => removeWallet(i)} className="absolute top-2 right-2 text-red-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity text-xs bg-slate-800 p-1 rounded">Hapus</button>
+                   
+                   <label className="text-xs text-slate-500">Provider</label>
+                   <select 
+                      className="bg-slate-800 border border-slate-700 rounded p-1 text-sm outline-none focus:border-primary"
+                      value={wallet.provider}
+                      onChange={(e) => handleWalletChange(i, 'provider', e.target.value)}
+                   >
+                     <option value="DANA">DANA</option>
+                     <option value="OVO">OVO</option>
+                     <option value="GOPAY">GOPAY</option>
+                     <option value="SHOPEEPAY">SHOPEEPAY</option>
+                     <option value="LINKAJA">LINKAJA</option>
+                   </select>
+
+                   <input placeholder="Nomor HP / E-Wallet" className="bg-transparent border-b border-slate-700 p-1 focus:border-primary outline-none" value={wallet.number} onChange={(e) => handleWalletChange(i, 'number', e.target.value)} />
+                   <input placeholder="Atas Nama" className="bg-transparent border-b border-slate-700 p-1 focus:border-primary outline-none" value={wallet.name} onChange={(e) => handleWalletChange(i, 'name', e.target.value)} />
+                </div>
+              ))}
+              {localSettings.e_wallets.length === 0 && <p className="text-slate-500 text-sm italic">Belum ada E-Wallet diatur.</p>}
+            </div>
           </div>
           
-          {localSettings.bank_accounts.map((bank, i) => (
-            <div key={i} className="bg-slate-900 p-3 rounded flex flex-col gap-2 relative group">
-               <button onClick={() => removeBank(i)} className="absolute top-2 right-2 text-red-500 opacity-0 group-hover:opacity-100">Hapus</button>
-               <input placeholder="Nama Bank (BCA/BRI)" className="bg-transparent border-b border-slate-700 p-1" value={bank.bank} onChange={(e) => handleBankChange(i, 'bank', e.target.value)} />
-               <input placeholder="Nomor Rekening" className="bg-transparent border-b border-slate-700 p-1" value={bank.number} onChange={(e) => handleBankChange(i, 'number', e.target.value)} />
-               <input placeholder="Atas Nama" className="bg-transparent border-b border-slate-700 p-1" value={bank.name} onChange={(e) => handleBankChange(i, 'name', e.target.value)} />
-            </div>
-          ))}
-          
+          {/* QRIS */}
           <div className="pt-4 border-t border-slate-700">
              <label className="block text-sm mb-2 font-medium">Gambar QRIS</label>
              <div className="flex flex-col gap-3">
@@ -226,7 +288,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
         </div>
         
         {/* Database */}
-         <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
+         <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4 h-fit">
           <h2 className="text-lg font-bold border-b border-slate-700 pb-2">Database Connection</h2>
           <p className="text-sm text-slate-400">Database saat ini terhubung.</p>
           <button onClick={resetDatabase} className="text-red-400 hover:text-red-300 text-sm flex items-center gap-1">

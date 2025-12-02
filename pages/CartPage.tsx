@@ -127,6 +127,25 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
              </div>
            )}
 
+           {selectedMethod === 'EWALLET' && (
+             <div className="space-y-4">
+                <p className="text-sm text-slate-400">Silakan transfer saldo E-Wallet ke nomor berikut:</p>
+                {settings.e_wallets && settings.e_wallets.length > 0 ? (
+                  settings.e_wallets.map((wallet, idx) => (
+                    <div key={idx} className="bg-slate-900 p-3 rounded flex justify-between items-center">
+                      <div>
+                        <p className="font-bold text-primary">{wallet.provider}</p>
+                        <p className="text-lg font-mono tracking-wide">{wallet.number}</p>
+                        <p className="text-sm text-slate-500">a.n {wallet.name}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-yellow-500 text-sm">Nomor E-Wallet belum dikonfigurasi oleh Admin.</p>
+                )}
+             </div>
+           )}
+
            {selectedMethod === 'QRIS' && (
              <div className="flex flex-col items-center">
                <p className="text-sm text-slate-400 mb-2">Scan QRIS berikut:</p>

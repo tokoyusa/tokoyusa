@@ -24,6 +24,7 @@ const DEFAULT_SETTINGS: StoreSettings = {
   email_contact: '',
   address: '',
   bank_accounts: [],
+  e_wallets: [],
   qris_url: ''
 };
 
@@ -80,7 +81,8 @@ const App: React.FC = () => {
         .single();
         
       if (settingsData) {
-        setSettings(settingsData.value);
+        // Merge with default to ensure new fields like e_wallets exist
+        setSettings({ ...DEFAULT_SETTINGS, ...settingsData.value });
       }
 
     } catch (error) {
