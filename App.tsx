@@ -250,7 +250,7 @@ const AdminDashboard: React.FC = () => {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-white">Dashboard <span className="text-xs text-green-400 font-mono font-normal ml-2 bg-green-900/30 px-2 py-1 rounded border border-green-500/30">v3.3 (Final Clean)</span></h2>
+          <h2 className="text-2xl font-bold text-white">Dashboard <span className="text-xs text-green-400 font-mono font-normal ml-2 bg-green-900/30 px-2 py-1 rounded border border-green-500/30">v5.2 (Clean Build)</span></h2>
           <div className={`px-3 py-1 rounded-full text-xs font-bold border ${isCloudConnected ? 'bg-green-500/10 text-green-400 border-green-500/30' : 'bg-gray-500/10 text-gray-400 border-gray-500/30'}`}>
               {isCloudConnected ? '● Cloud Connected' : '○ Local Mode'}
           </div>
@@ -480,7 +480,7 @@ const AdminSettings: React.FC = () => {
 
   const handleResetPayments = () => {
       if (confirm("Reset metode pembayaran ke default? Data yang ada sekarang akan ditimpa.")) {
-          const defaults: PaymentMethod[] = DataService.getPayments(); // Will return DataService defaults if LocalStorage is cleared/key mismatch
+          const defaults: PaymentMethod[] = DataService.getPayments(); 
           setPayments(defaults);
           updatePayments(defaults);
       }
@@ -491,660 +491,855 @@ const AdminSettings: React.FC = () => {
       <h2 className="text-2xl font-bold text-white mb-6">Pengaturan Toko</h2>
       <div className="space-y-8">
         <div className="bg-dark-800 p-6 rounded-xl border border-dark-700">
-          <h3 className="text-lg font-bold text-white mb-4 border-b border-dark-700 pb-2">Akun Admin</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><label className="block text-sm text-gray-400 mb-1">Username Admin</label><input value={formData.adminUsername || 'admin'} onChange={e => setFormData({...formData, adminUsername: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-white" /></div>
-            <div><label className="block text-sm text-gray-400 mb-1">Password Admin</label><input type="text" value={formData.adminPassword || 'admin'} onChange={e => setFormData({...formData, adminPassword: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-white" /></div>
-          </div>
-        </div>
-
-        <div className="bg-dark-800 p-6 rounded-xl border border-dark-700">
           <h3 className="text-lg font-bold text-white mb-4 border-b border-dark-700 pb-2">Informasi Umum</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><label className="block text-sm text-gray-400 mb-1">Nama Toko</label><input value={formData.storeName} onChange={e => setFormData({...formData, storeName: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-white" /></div>
-            <div><label className="block text-sm text-gray-400 mb-1">WhatsApp</label><input value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-white" /></div>
-            <div className="md:col-span-2"><label className="block text-sm text-gray-400 mb-1">Alamat</label><input value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-white" /></div>
-            <div className="md:col-span-2"><label className="block text-sm text-gray-400 mb-1">Deskripsi</label><textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-white" /></div>
+             <div><label className="text-xs text-gray-400">Nama Toko</label><input type="text" value={formData.storeName} onChange={e => setFormData({...formData, storeName: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded p-2 text-white" /></div>
+             <div><label className="text-xs text-gray-400">WhatsApp Admin</label><input type="text" value={formData.whatsapp} onChange={e => setFormData({...formData, whatsapp: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded p-2 text-white" /></div>
+             <div><label className="text-xs text-gray-400">Alamat</label><input type="text" value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded p-2 text-white" /></div>
+             <div><label className="text-xs text-gray-400">Email</label><input type="text" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded p-2 text-white" /></div>
           </div>
+          <div className="mt-4"><label className="text-xs text-gray-400">Deskripsi Toko</label><textarea value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded p-2 text-white" rows={2} /></div>
         </div>
 
         <div className="bg-dark-800 p-6 rounded-xl border border-dark-700">
-            <div className="flex justify-between items-center mb-4 border-b border-dark-700 pb-2">
-                <h3 className="text-lg font-bold text-white">Pengaturan Pembayaran</h3>
-                <button onClick={handleResetPayments} className="text-xs bg-red-500/10 text-red-400 px-3 py-1 rounded border border-red-500/20 hover:bg-red-500/20">Reset Default Payments</button>
-            </div>
-            
-            {payments.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                    <p>Tidak ada metode pembayaran.</p>
-                    <p className="text-xs mt-2">Klik tombol "Reset Default Payments" diatas untuk memuat ulang.</p>
-                </div>
-            ) : (
-                <div className="space-y-6">
-                {payments.map((pm, idx) => {
-                    // Normalize type for safe checking
-                    const pType = pm.type ? pm.type.toUpperCase().trim() : 'BANK'; 
-                    // CRITICAL FIX: Show manual inputs for EVERYTHING except TRIPAY.
-                    const isManual = pType !== 'TRIPAY'; 
+           <h3 className="text-lg font-bold text-white mb-4 border-b border-dark-700 pb-2">Keamanan Admin</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div><label className="text-xs text-gray-400">Username</label><input type="text" value={formData.adminUsername || ''} onChange={e => setFormData({...formData, adminUsername: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded p-2 text-white" /></div>
+              <div><label className="text-xs text-gray-400">Password</label><input type="text" value={formData.adminPassword || ''} onChange={e => setFormData({...formData, adminPassword: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded p-2 text-white" /></div>
+           </div>
+        </div>
 
-                    return (
-                    <div key={pm.id || idx} className="bg-dark-900/50 p-4 rounded-lg border border-dark-700 shadow-sm">
-                        <div className="flex justify-between items-center mb-4 bg-dark-800 p-2 rounded">
-                            <div className="flex items-center gap-2">
-                                <span className="font-bold text-white">{pm.type}</span>
-                                <span className="text-[10px] text-gray-600 bg-gray-800 px-1 rounded border border-gray-700">Type: {pType}</span>
-                                {pm.name && <span className="text-gray-400 text-sm">- {pm.name}</span>}
-                            </div>
-                            <label className="flex items-center gap-2 cursor-pointer bg-dark-900 px-3 py-1 rounded border border-dark-600">
-                                <span className={`text-xs font-bold ${pm.isActive ? 'text-green-400' : 'text-gray-500'}`}>{pm.isActive ? 'AKTIF' : 'NON-AKTIF'}</span>
+        <div className="bg-dark-800 p-6 rounded-xl border border-dark-700">
+           <div className="flex justify-between items-center mb-4 border-b border-dark-700 pb-2">
+               <h3 className="text-lg font-bold text-white">Metode Pembayaran</h3>
+               <button onClick={handleResetPayments} className="text-xs bg-red-500/10 text-red-400 px-2 py-1 rounded hover:bg-red-500/20">Reset Default Payments</button>
+           </div>
+           
+           <div className="space-y-4">
+              {payments.map((method, index) => {
+                  const safeType = (method.type || 'BANK').toUpperCase();
+                  const isTripay = safeType === 'TRIPAY';
+                  
+                  return (
+                    <div key={method.id || index} className="p-4 bg-dark-900 rounded-lg border border-dark-700">
+                        <div className="flex justify-between items-center mb-2">
+                             <div className="flex items-center gap-2">
+                                <span className={`px-2 py-0.5 text-xs font-bold rounded ${isTripay ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'}`}>{safeType}</span>
                                 <input 
-                                    type="checkbox" 
-                                    checked={!!pm.isActive} 
-                                    onChange={e => { 
-                                        const newP = [...payments]; 
-                                        newP[idx] = { ...newP[idx], isActive: e.target.checked };
-                                        setPayments(newP); 
-                                    }} 
-                                    className="accent-primary w-4 h-4" 
+                                    type="text" 
+                                    value={method.name} 
+                                    onChange={(e) => {
+                                        const newP = [...payments];
+                                        newP[index].name = e.target.value;
+                                        setPayments(newP);
+                                    }}
+                                    className="bg-transparent border-b border-dark-700 text-white font-bold text-sm focus:border-primary outline-none w-48"
                                 />
-                            </label>
+                             </div>
+                             <button 
+                                onClick={() => {
+                                    const newP = [...payments];
+                                    newP[index].isActive = !newP[index].isActive;
+                                    setPayments(newP);
+                                }}
+                                className={`text-xs px-2 py-1 rounded ${method.isActive ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}
+                             >
+                                {method.isActive ? 'AKTIF' : 'NON-AKTIF'}
+                             </button>
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="md:col-span-2">
-                                <label className="block text-xs text-gray-500 mb-1">Nama Tampilan (Bank/E-Wallet)</label>
-                                <input 
-                                    value={pm.name || ''} 
-                                    onChange={e => { const newP = [...payments]; newP[idx] = { ...newP[idx], name: e.target.value }; setPayments(newP); }} 
-                                    className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none transition-colors" 
-                                    placeholder="Contoh: Bank BCA" 
-                                />
-                            </div>
 
-                            {/* Show inputs if NOT Tripay (Manual Payment) */}
-                            {isManual && (
-                                <>
-                                    <div>
-                                        <label className="block text-xs text-gray-500 mb-1">{pType === 'QRIS' ? 'URL Gambar / Konten QR' : 'Nomor Rekening / No. HP'}</label>
-                                        <input 
-                                            value={pm.accountNumber || ''} 
-                                            onChange={e => { const newP = [...payments]; newP[idx] = { ...newP[idx], accountNumber: e.target.value }; setPayments(newP); }} 
-                                            className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" 
-                                            placeholder={pType === 'QRIS' ? 'https://...' : '0123...'} 
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs text-gray-500 mb-1">Atas Nama</label>
-                                        <input 
-                                            value={pm.accountName || ''} 
-                                            onChange={e => { const newP = [...payments]; newP[idx] = { ...newP[idx], accountName: e.target.value }; setPayments(newP); }} 
-                                            className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" 
-                                            placeholder="Nama Pemilik" 
-                                        />
-                                    </div>
-                                </>
-                            )}
-
-                            <div className="md:col-span-2">
-                                 <label className="block text-xs text-gray-500 mb-1">Deskripsi / Instruksi Transfer</label>
-                                 <input 
-                                    value={pm.description || ''} 
-                                    onChange={e => { const newP = [...payments]; newP[idx] = { ...newP[idx], description: e.target.value }; setPayments(newP); }} 
-                                    className="w-full bg-dark-800 border border-dark-600 rounded px-3 py-2 text-sm text-white focus:border-primary outline-none" 
-                                    placeholder="Contoh: Transfer dan kirim bukti..." 
-                                />
-                            </div>
+                        {/* Force Show Inputs for Everything except Tripay automated settings logic */}
+                        {!isTripay && (
+                             <div className="grid grid-cols-2 gap-2 mt-2">
+                                <div>
+                                    <label className="text-[10px] text-gray-500">Nomor Rekening / No. HP</label>
+                                    <input 
+                                        type="text" 
+                                        value={method.accountNumber || ''} 
+                                        onChange={(e) => {
+                                            const newP = [...payments];
+                                            newP[index].accountNumber = e.target.value;
+                                            setPayments(newP);
+                                        }}
+                                        className="w-full bg-dark-800 border border-dark-700 rounded px-2 py-1 text-xs text-white"
+                                        placeholder="Contoh: 1234567890"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-gray-500">Atas Nama</label>
+                                    <input 
+                                        type="text" 
+                                        value={method.accountName || ''} 
+                                        onChange={(e) => {
+                                            const newP = [...payments];
+                                            newP[index].accountName = e.target.value;
+                                            setPayments(newP);
+                                        }}
+                                        className="w-full bg-dark-800 border border-dark-700 rounded px-2 py-1 text-xs text-white"
+                                        placeholder="Contoh: A.N Admin"
+                                    />
+                                </div>
+                             </div>
+                        )}
+                        {/* Description field for all */}
+                        <div className="mt-2">
+                             <label className="text-[10px] text-gray-500">Deskripsi / Catatan</label>
+                             <input 
+                                type="text" 
+                                value={method.description || ''} 
+                                onChange={(e) => {
+                                    const newP = [...payments];
+                                    newP[index].description = e.target.value;
+                                    setPayments(newP);
+                                }}
+                                className="w-full bg-dark-800 border border-dark-700 rounded px-2 py-1 text-xs text-white"
+                                placeholder="Instruksi tambahan..."
+                            />
                         </div>
                     </div>
-                )})}
-                </div>
-            )}
+                  );
+              })}
+           </div>
         </div>
-        <button onClick={handleSave} className="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-3 rounded-xl">Simpan & Auto Sync</button>
+
+        <button onClick={handleSave} className="w-full bg-primary hover:bg-indigo-600 text-white py-3 rounded-lg font-bold text-lg sticky bottom-6 shadow-xl">
+            Simpan Perubahan
+        </button>
       </div>
     </div>
   );
 };
 
 const AdminDatabase: React.FC = () => {
-  const { settings, updateSettings, products, vouchers, affiliates, customers, paymentMethods, supabase, resetLocalData, updateProducts, updateVouchers, updateAffiliates, updateCustomers, updatePayments } = useAppContext();
-  const [formData, setFormData] = useState(settings);
-  const [showSql, setShowSql] = useState(!settings.supabaseUrl); 
-  const [isSyncing, setIsSyncing] = useState(false);
-
-  const handleSync = async () => {
-    if (!supabase) return alert("Supabase belum terkoneksi!");
-    if (!confirm("Overwrite cloud data with local data?")) return;
-    setIsSyncing(true);
-    try {
-        if (products.length > 0) { const fp = products.map(ensureUuid); updateProducts(fp); await supabase.from('products').upsert(fp.map(p => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, discount_price: p.discountPrice, image: p.image, file_url: p.fileUrl, is_popular: p.isPopular }))); }
-        if (vouchers.length > 0) { const fv = vouchers.map(ensureUuid); updateVouchers(fv); await supabase.from('vouchers').upsert(fv.map(v => ({ id: v.id, code: v.code, type: v.type, value: v.value, is_active: v.isActive }))); }
-        if (affiliates.length > 0) { const fa = affiliates.map(ensureUuid); updateAffiliates(fa); await supabase.from('affiliates').upsert(fa.map(a => ({ id: a.id, name: a.name, code: a.code, password: a.password, commission_rate: a.commissionRate, total_earnings: a.totalEarnings, bank_details: a.bankDetails, is_active: a.isActive }))); }
-        // Sync Customers
-        if (customers.length > 0) { const fc = customers.map(ensureUuid); updateCustomers(fc); await supabase.from('customers').upsert(fc.map(c => ({ id: c.id, name: c.name, whatsapp: c.whatsapp, password: c.password, created_at: c.createdAt }))); }
-
-        const dbSettings = { id: 'settings_01', store_name: settings.storeName, address: settings.address, whatsapp: settings.whatsapp, email: settings.email, description: settings.description, logo_url: settings.logoUrl, tripay_api_key: settings.tripayApiKey, tripay_private_key: settings.tripayPrivateKey, tripay_merchant_code: settings.tripayMerchantCode, admin_username: settings.adminUsername, admin_password: settings.adminPassword };
-        await supabase.from('store_settings').upsert(dbSettings);
+    const { supabase, resetLocalData } = useAppContext();
+    const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+  
+    const handleUpload = async () => {
+        if (!supabase) return alert("Supabase belum terhubung. Cek Environment Variables.");
+        if (!confirm("INI AKAN MENIMPA DATA DI CLOUD DENGAN DATA LOKAL ANDA. Lanjutkan?")) return;
         
-        // Fix: Explicitly map isActive to is_active (boolean)
-        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ 
-            id: p.id, 
-            type: p.type, 
-            name: p.name, 
-            account_number: p.accountNumber, 
-            account_name: p.accountName, 
-            description: p.description, 
-            logo: p.logo, 
-            is_active: !!p.isActive // Ensure boolean
-        }));
-        await supabase.from('payment_methods').upsert(dbPayments);
+        setUploadStatus('uploading');
+        try {
+            const products = DataService.getProducts().map(ensureUuid);
+            const settings = [ensureUuid(DataService.getSettings())];
+            const payments = DataService.getPayments().map(p => ({ ...ensureUuid(p), is_active: p.isActive })); // Map isActive
+            const vouchers = DataService.getVouchers().map(v => ({ ...ensureUuid(v), is_active: v.isActive }));
+            const affiliates = DataService.getAffiliates().map(a => ({ ...ensureUuid(a), is_active: a.isActive }));
+            const customers = DataService.getCustomers().map(c => ensureUuid(c));
+            
+            // Upsert all
+            await supabase.from('products').upsert(products);
+            await supabase.from('store_settings').upsert(settings);
+            await supabase.from('payment_methods').upsert(payments);
+            await supabase.from('vouchers').upsert(vouchers);
+            await supabase.from('affiliates').upsert(affiliates);
+            if (customers.length > 0) await supabase.from('customers').upsert(customers);
+            
+            setUploadStatus('success');
+            alert("Upload Berhasil! Data lokal admin sekarang sudah tersimpan di Supabase.");
+        } catch (err: any) {
+            console.error(err);
+            setUploadStatus('error');
+            alert("Gagal Upload: " + err.message);
+        }
+    };
+  
+    return (
+      <div className="p-6">
+        <h2 className="text-2xl font-bold text-white mb-6">Database & API</h2>
+        
+        <div className="space-y-6">
+             {/* RESET BUTTON */}
+             <div className="bg-red-500/10 border border-red-500/30 p-6 rounded-xl">
+                 <h3 className="text-lg font-bold text-red-400 mb-2">Zona Bahaya</h3>
+                 <p className="text-sm text-gray-400 mb-4">Jika aplikasi error atau data tidak sinkron, gunakan tombol ini untuk menghapus cache browser dan memuat ulang.</p>
+                 <button onClick={resetLocalData} className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-bold">
+                     Reset Local & Reload
+                 </button>
+             </div>
 
-        alert("Upload Berhasil!");
-    } catch (e: any) { alert("Gagal upload: " + (e.message || e)); } finally { setIsSyncing(false); }
-  };
+             <div className="bg-dark-800 p-6 rounded-xl border border-dark-700">
+                <h3 className="text-lg font-bold text-white mb-2">Sync Dashboard</h3>
+                <p className="text-gray-400 text-sm mb-4">Status Koneksi: {supabase ? <span className="text-green-400">Connected to Supabase</span> : <span className="text-red-400">Disconnected (Check Env Vars)</span>}</p>
+                
+                <button 
+                    onClick={handleUpload} 
+                    disabled={!supabase || uploadStatus === 'uploading'}
+                    className={`w-full py-3 rounded-lg font-bold text-white ${uploadStatus === 'uploading' ? 'bg-gray-600' : 'bg-blue-600 hover:bg-blue-500'}`}
+                >
+                    {uploadStatus === 'uploading' ? 'Uploading...' : 'UPLOAD LOCAL DATA TO CLOUD'}
+                </button>
+             </div>
+
+             <div className="bg-dark-800 p-6 rounded-xl border border-dark-700">
+                <h3 className="text-lg font-bold text-white mb-2">Supabase SQL Setup</h3>
+                <p className="text-sm text-gray-400 mb-2">Copy kode ini dan jalankan di Supabase SQL Editor untuk membuat tabel.</p>
+                <div className="relative">
+                    <pre className="bg-dark-900 p-4 rounded-lg text-xs text-green-400 overflow-x-auto h-64 no-scrollbar">
+                        {SUPABASE_SCHEMA}
+                    </pre>
+                    <button 
+                        onClick={() => navigator.clipboard.writeText(SUPABASE_SCHEMA)}
+                        className="absolute top-2 right-2 bg-primary text-white text-xs px-2 py-1 rounded"
+                    >
+                        Copy
+                    </button>
+                </div>
+             </div>
+        </div>
+      </div>
+    );
+};
+
+// --- Main Layout ---
+
+const AdminLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { logout } = useAppContext();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Simple active tab logic based on path
+  const currentTab = location.pathname.split('/admin/')[1] || 'dashboard';
 
   return (
-    <div className="p-6 pb-24 max-w-4xl mx-auto">
-       <h2 className="text-2xl font-bold text-white mb-6">Database & API</h2>
-       <div className="space-y-6">
-          <div className="bg-dark-800 p-6 rounded-xl border border-dark-700">
-            <h3 className="text-lg font-bold text-green-400 mb-4 flex items-center gap-2"><i className="fas fa-database"></i> Supabase Integration {supabase && <span className="bg-green-500/20 text-green-400 text-xs px-2 py-1 rounded-full border border-green-500/30">Connected</span>}</h3>
-            <div className="bg-dark-900/50 p-4 rounded-lg border border-dark-700 mb-6"><h4 className="font-bold text-white mb-2">Sync Dashboard</h4><p className="text-gray-400 text-sm mb-4">Auto-Sync is Active. Use buttons below for troubleshooting.</p><div className="flex gap-4"><button onClick={handleSync} disabled={isSyncing || !supabase} className="flex-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2">{isSyncing ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-cloud-upload-alt"></i>}{isSyncing ? "Uploading..." : "FORCE UPLOAD"}</button><button onClick={() => { if(confirm("Reset browser data?")) resetLocalData(); }} className="px-6 py-3 bg-red-600/20 hover:bg-red-600/40 text-red-500 border border-red-600/50 rounded-lg"><i className="fas fa-redo"></i> Reset Local</button></div></div>
-            <div className="space-y-4 pt-4 border-t border-dark-700"><div><label className="text-sm text-gray-400">Supabase URL</label><input type="password" value={formData.supabaseUrl || ''} onChange={e => setFormData({...formData, supabaseUrl: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-white" /></div><div><label className="text-sm text-gray-400">Anon Key</label><input type="password" value={formData.supabaseKey || ''} onChange={e => setFormData({...formData, supabaseKey: e.target.value})} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-2 text-white" /></div><div className="mt-4"><button onClick={() => setShowSql(!showSql)} className="text-primary text-sm font-bold"> {showSql ? 'Hide SQL' : 'Show SQL Schema'} </button>{showSql && <textarea readOnly value={SUPABASE_SCHEMA} className="w-full h-64 bg-dark-900 border border-dark-700 rounded-lg p-4 mt-2 text-xs font-mono text-gray-300" />}</div></div>
+    <div className="flex h-screen bg-dark-900 text-gray-100 overflow-hidden font-sans">
+      <AdminSidebar 
+        isOpen={isSidebarOpen} 
+        setIsOpen={setIsSidebarOpen} 
+        activeTab={currentTab}
+        setActiveTab={(tab) => navigate(`/admin/${tab}`)}
+        onLogout={logout}
+      />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <header className="h-16 bg-dark-800 border-b border-dark-700 flex items-center justify-between px-4 md:px-6 z-10">
+          <button onClick={() => setIsSidebarOpen(true)} className="md:hidden text-gray-400 hover:text-white"><i className="fas fa-bars text-xl"></i></button>
+          <div className="flex items-center gap-4 ml-auto">
+            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-white font-bold">A</div>
           </div>
-          <button onClick={() => { updateSettings(formData); alert('Saved. Please refresh.'); }} className="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-3 rounded-xl">Simpan Konfigurasi</button>
+        </header>
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-dark-900 no-scrollbar">
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+};
+
+const CustomerLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { settings, cart, user, logout, isCloudConnected, debugDataCount } = useAppContext();
+  const navigate = useNavigate();
+  
+  return (
+    <div className="min-h-screen bg-dark-900 text-gray-100 font-sans pb-20 md:pb-0">
+      <nav className="sticky top-0 z-40 bg-dark-800/80 backdrop-blur-md border-b border-dark-700">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <Link to="/" className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"><i className="fas fa-bolt text-white"></i></div>
+              <span className="font-bold text-xl text-white">{settings.storeName}</span>
+            </Link>
+            <div className="hidden md:flex items-center gap-6">
+               <Link to="/" className="text-gray-300 hover:text-white transition-colors">Toko</Link>
+               {user && <Link to="/history" className="text-gray-300 hover:text-white transition-colors">Riwayat</Link>}
+               <Link to="/cart" className="relative text-gray-300 hover:text-white transition-colors">
+                  <i className="fas fa-shopping-cart text-lg"></i>
+                  {cart.length > 0 && <span className="absolute -top-2 -right-2 bg-primary text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">{cart.length}</span>}
+               </Link>
+               {user ? (
+                   <div className="flex items-center gap-4">
+                       <span className="text-sm text-primary">Hi, {user.name}</span>
+                       <button onClick={logout} className="text-sm text-red-400 hover:text-red-300">Keluar</button>
+                   </div>
+               ) : (
+                   <Link to="/login" className="bg-primary hover:bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">Masuk</Link>
+               )}
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {children}
+      </main>
+
+      {/* Mobile Bottom Nav */}
+      <div className="md:hidden fixed bottom-0 inset-x-0 bg-dark-800 border-t border-dark-700 pb-safe z-50">
+        <div className="grid grid-cols-4 h-16">
+          <Link to="/" className="flex flex-col items-center justify-center text-gray-400 hover:text-primary"><i className="fas fa-store mb-1"></i><span className="text-[10px]">Toko</span></Link>
+          <Link to="/" className="flex flex-col items-center justify-center text-gray-400 hover:text-primary"><i className="fas fa-th-large mb-1"></i><span className="text-[10px]">Kategori</span></Link>
+          <Link to={user ? "/history" : "/login"} className="flex flex-col items-center justify-center text-gray-400 hover:text-primary"><i className="fas fa-history mb-1"></i><span className="text-[10px]">Riwayat</span></Link>
+          <Link to={user ? "/account" : "/login"} className="flex flex-col items-center justify-center text-gray-400 hover:text-primary"><i className="fas fa-user mb-1"></i><span className="text-[10px]">Akun</span></Link>
+        </div>
+      </div>
+
+       {/* Floating Cart Button Mobile */}
+       <Link to="/cart" className="md:hidden fixed bottom-20 right-4 w-14 h-14 bg-primary rounded-full shadow-lg shadow-primary/40 flex items-center justify-center text-white z-40">
+          <i className="fas fa-shopping-cart text-xl"></i>
+          {cart.length > 0 && <span className="absolute top-0 right-0 bg-red-500 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center border-2 border-dark-900">{cart.length}</span>}
+       </Link>
+
+       {/* Footer Debug Info */}
+       <div className="text-center py-4 text-[10px] text-gray-600 font-mono">
+           {isCloudConnected ? `● Cloud Connected | Loaded: ${debugDataCount} items` : '○ Local Mode'}
        </div>
     </div>
   );
 };
 
-// --- Customer Views ---
-
-const CustomerHistory: React.FC = () => {
-    const { user, orders, products } = useAppContext();
-    const myOrders = orders.filter(o => o.customerWhatsapp === user?.phone).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    
-    if (!user) return <Navigate to="/login" />;
-
-    return (
-        <div className="max-w-2xl mx-auto p-6 pb-24">
-            <h2 className="text-2xl font-bold text-white mb-6">Riwayat Pesanan</h2>
-            {myOrders.length === 0 ? (
-                <div className="text-center py-12 text-gray-500 bg-dark-800 rounded-xl border border-dark-700">Belum ada riwayat pesanan.</div>
-            ) : (
-                <div className="space-y-4">
-                    {myOrders.map(order => (
-                        <div key={order.id} className="bg-dark-800 p-4 rounded-xl border border-dark-700">
-                            <div className="flex justify-between items-start mb-2">
-                                <div>
-                                    <span className={`text-xs font-bold px-2 py-1 rounded ${order.status === 'PAID' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{order.status}</span>
-                                    <span className="text-gray-400 text-xs ml-2">{new Date(order.date).toLocaleString()}</span>
-                                </div>
-                                <span className="font-bold text-white">Rp {order.total.toLocaleString()}</span>
-                            </div>
-                            <div className="space-y-2 border-t border-dark-700 pt-2 mt-2">
-                                {order.items.map((item, idx) => (
-                                    <div key={idx} className="flex justify-between text-sm">
-                                        <span className="text-gray-300">{item.name} x{item.quantity}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            {order.voucherCode && <div className="text-xs text-green-400 mt-2">Voucher: {order.voucherCode} (-Rp {order.discountAmount?.toLocaleString()})</div>}
-                            <div className="mt-3 text-xs text-gray-500">Metode: {order.paymentMethod}</div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    )
-}
-
 const CustomerHome: React.FC = () => {
-  const { products, settings, addToCart, setReferralCode } = useAppContext();
-  const [searchParams] = useSearchParams();
-  const [categoryFilter, setCategoryFilter] = useState('All');
-  useEffect(() => { const ref = searchParams.get('ref'); if (ref) setReferralCode(ref); }, [searchParams, setReferralCode]);
+  const { products, addToCart } = useAppContext();
+  const [searchTerm, setSearchTerm] = useState('');
+  const [category, setCategory] = useState('All');
+
+  const filtered = products.filter(p => {
+    const matchSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchCat = category === 'All' || p.category === category;
+    return matchSearch && matchCat;
+  });
+
   const categories = ['All', ...Array.from(new Set(products.map(p => p.category)))];
-  const filteredProducts = categoryFilter === 'All' ? products : products.filter(p => p.category === categoryFilter);
+
   return (
     <div className="pb-20">
-      <div className="relative bg-dark-800 overflow-hidden"><div className="absolute inset-0 bg-gradient-to-r from-primary/20 to-secondary/20 z-0"></div><div className="max-w-6xl mx-auto px-6 py-16 relative z-10 text-center md:text-left"><h1 className="text-4xl md:text-5xl font-extrabold text-white mb-4 leading-tight">Produk Digital Terbaik <br/><span className="text-primary">Untuk Kebutuhanmu</span></h1><p className="text-gray-300 text-lg mb-6 max-w-xl">{settings.description}</p><button onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth'})} className="bg-primary hover:bg-indigo-600 text-white px-8 py-3 rounded-full font-bold">Belanja Sekarang</button></div></div>
-      <div className="max-w-6xl mx-auto px-6 py-8 overflow-x-auto no-scrollbar"><div className="flex space-x-4">{categories.map(cat => <button key={cat} onClick={() => setCategoryFilter(cat)} className={`px-6 py-2 rounded-full border whitespace-nowrap transition-colors ${categoryFilter === cat ? 'bg-primary border-primary text-white' : 'bg-dark-800 border-dark-700 text-gray-400 hover:bg-dark-700'}`}>{cat}</button>)}</div></div>
-      <div id="products" className="max-w-6xl mx-auto px-6 mb-12"><h2 className="text-2xl font-bold text-white mb-6">Produk Terbaru</h2><div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">{filteredProducts.map(p => <ProductCard key={p.id} product={p} onAdd={() => { addToCart(p); alert("Produk ditambahkan!"); }} />)}</div></div>
+       <div className="mb-8 text-center">
+           <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">Digital Products for <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">Creators</span></h1>
+           <p className="text-gray-400 max-w-2xl mx-auto">Temukan aset digital terbaik untuk mempercepat pekerjaan Anda.</p>
+       </div>
+
+       <div className="flex flex-col md:flex-row gap-4 mb-8 sticky top-20 z-30 bg-dark-900/90 py-4 backdrop-blur">
+          <div className="relative flex-1">
+             <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-500"></i>
+             <input type="text" placeholder="Cari produk..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-full bg-dark-800 border border-dark-700 rounded-full pl-12 pr-4 py-3 text-white focus:border-primary outline-none shadow-sm" />
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 no-scrollbar">
+             {categories.map(cat => (
+                 <button key={cat} onClick={() => setCategory(cat)} className={`px-6 py-3 rounded-full text-sm font-medium whitespace-nowrap transition-all ${category === cat ? 'bg-white text-dark-900' : 'bg-dark-800 text-gray-400 hover:bg-dark-700'}`}>
+                     {cat}
+                 </button>
+             ))}
+          </div>
+       </div>
+
+       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          {filtered.map(p => <ProductCard key={p.id} product={p} onAdd={() => addToCart(p)} />)}
+       </div>
+       {filtered.length === 0 && <div className="text-center py-20 text-gray-500">Produk tidak ditemukan.</div>}
     </div>
   );
 };
 
 const CustomerCart: React.FC = () => {
-  const { cart, removeFromCart, clearCart, settings, paymentMethods, vouchers, referralCode, affiliates, updateAffiliates, user, addOrder } = useAppContext();
-  const [selectedPayment, setSelectedPayment] = useState<string>('');
-  const [voucherCode, setVoucherCode] = useState('');
+  const { cart, removeFromCart, clearCart, settings, paymentMethods, referralCode, addOrder, user, vouchers } = useAppContext();
+  const [selectedPayment, setSelectedPayment] = useState('');
+  const [customerName, setCustomerName] = useState(user?.name || '');
+  const [customerWhatsapp, setCustomerWhatsapp] = useState(user?.phone || '');
+  const [voucherInput, setVoucherInput] = useState('');
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
-  const navigate = useNavigate();
 
-  // Filter active payment methods for customer view
-  const activePaymentMethods = useMemo(() => {
-      return (paymentMethods || []).filter(pm => pm.isActive);
-  }, [paymentMethods]);
+  useEffect(() => {
+     if (user) {
+         setCustomerName(user.name);
+         setCustomerWhatsapp(user.phone || '');
+     }
+  }, [user]);
 
-  const subTotal = cart.reduce((sum, item) => sum + ((item.discountPrice || item.price) * item.quantity), 0);
+  const subtotal = cart.reduce((sum, item) => sum + ((item.discountPrice || item.price) * item.quantity), 0);
+  
+  // Calculate Discount
   let discountAmount = 0;
-  if (appliedVoucher) discountAmount = appliedVoucher.type === 'PERCENT' ? (subTotal * appliedVoucher.value) / 100 : appliedVoucher.value;
-  const total = Math.max(0, subTotal - discountAmount);
+  if (appliedVoucher) {
+      if (appliedVoucher.type === 'FIXED') {
+          discountAmount = appliedVoucher.value;
+      } else {
+          discountAmount = (subtotal * appliedVoucher.value) / 100;
+      }
+  }
+  const total = Math.max(0, subtotal - discountAmount);
+
+  const activePayments = paymentMethods.filter(p => p.isActive);
 
   const handleApplyVoucher = () => {
-    const found = vouchers.find(v => v.code === voucherCode.toUpperCase() && v.isActive);
-    if (found) { setAppliedVoucher(found); alert("Voucher digunakan!"); } else { alert("Voucher tidak valid"); setAppliedVoucher(null); }
+      const v = vouchers.find(vc => vc.code === voucherInput.toUpperCase() && vc.isActive);
+      if (v) {
+          setAppliedVoucher(v);
+          alert("Voucher berhasil dipasang!");
+      } else {
+          alert("Voucher tidak valid atau kadaluarsa.");
+          setAppliedVoucher(null);
+      }
   };
 
   const handleCheckout = () => {
-    if (!selectedPayment) return alert('Pilih metode pembayaran');
-    if (cart.length === 0) return alert('Keranjang kosong');
-    // Require login for history feature
-    if (!user || user.role !== 'CUSTOMER') {
-        alert("Silakan Login terlebih dahulu agar riwayat pesanan Anda tersimpan.");
-        navigate('/login');
-        return;
-    }
-
-    const paymentMethod = paymentMethods.find(p => p.id === selectedPayment);
+    if (!customerName || !customerWhatsapp || !selectedPayment) return alert("Mohon lengkapi data pemesan.");
     
-    // Save Order to DB
+    // Save Order Local/Cloud
     const newOrder: Order = {
         id: generateUUID(),
-        customerName: user.name,
-        customerWhatsapp: user.phone || '',
-        items: [...cart],
-        total: total,
-        paymentMethod: paymentMethod?.name || 'Unknown',
+        items: cart,
+        total,
+        customerName,
+        customerWhatsapp,
+        paymentMethod: selectedPayment,
         status: 'PENDING',
         date: new Date().toISOString(),
         voucherCode: appliedVoucher?.code,
-        discountAmount: discountAmount
+        discountAmount
     };
     addOrder(newOrder);
 
-    // Affiliate Logic
-    if (referralCode) {
-      const affiliate = affiliates.find(a => a.code === referralCode);
-      if (affiliate && affiliate.isActive) {
-        const commission = Math.round((subTotal * affiliate.commissionRate) / 100);
-        updateAffiliates(affiliates.map(a => a.id === affiliate.id ? { ...a, totalEarnings: a.totalEarnings + commission } : a));
-      }
-    }
-    
-    let message = `Halo *${settings.storeName}*, saya ingin memesan:\n\n`;
-    cart.forEach((item, idx) => { message += `${idx + 1}. ${item.name} x${item.quantity} - Rp ${(item.discountPrice || item.price).toLocaleString()}\n`; });
-    message += `\nSubtotal: Rp ${subTotal.toLocaleString()}`;
-    if (appliedVoucher) message += `\nVoucher (${appliedVoucher.code}): -Rp ${discountAmount.toLocaleString()}`;
-    message += `\n*Total Akhir: Rp ${total.toLocaleString()}*`;
-    message += `\nMetode Pembayaran: ${paymentMethod?.name}`;
-    message += `\nNama: ${user.name}`;
-    if (referralCode) message += `\nRef: ${referralCode}`;
-    message += `\n\nMohon diproses, terima kasih.`;
-    
-    window.open(`https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(message)}`, '_blank');
-    clearCart(); navigate('/history');
+    // Format WhatsApp Message
+    const payMethod = paymentMethods.find(p => p.id === selectedPayment);
+    let itemsList = cart.map(i => `- ${i.name} (x${i.quantity})`).join('\n');
+    let message = `Halo ${settings.storeName}, saya ingin memesan:\n\n${itemsList}\n\n`;
+    message += `Subtotal: Rp ${subtotal.toLocaleString()}\n`;
+    if (appliedVoucher) message += `Voucher (${appliedVoucher.code}): -Rp ${discountAmount.toLocaleString()}\n`;
+    message += `*Total: Rp ${total.toLocaleString()}*\n\n`;
+    message += `Nama: ${customerName}\nWA: ${customerWhatsapp}\nPembayaran: ${payMethod?.name}\n`;
+    if (referralCode) message += `Ref Code: ${referralCode}`;
+
+    const url = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank');
+    clearCart();
   };
 
-  if (cart.length === 0) return <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center"><i className="fas fa-shopping-cart text-6xl text-dark-700 mb-4"></i><h2 className="text-xl font-bold text-white mb-2">Keranjang Kosong</h2><Link to="/" className="text-primary">Kembali Belanja</Link></div>;
+  if (cart.length === 0) return <div className="text-center py-20"><i className="fas fa-shopping-cart text-6xl text-dark-700 mb-4"></i><h2 className="text-2xl font-bold text-white mb-2">Keranjang Kosong</h2><Link to="/" className="text-primary hover:underline">Mulai Belanja</Link></div>;
 
   return (
-    <div className="max-w-2xl mx-auto p-6 pb-24">
-      <h1 className="text-2xl font-bold text-white mb-6">Checkout</h1>
-      <div className="bg-dark-800 rounded-xl overflow-hidden mb-6 border border-dark-700">
-        {cart.map(item => (<div key={item.id} className="flex items-center gap-4 p-4 border-b border-dark-700"><img src={item.image} className="w-16 h-16 object-cover rounded" /><div className="flex-1"><h4 className="font-bold text-white text-sm">{item.name}</h4><p className="text-primary text-sm">Rp {(item.discountPrice || item.price).toLocaleString()} x {item.quantity}</p></div><button onClick={() => removeFromCart(item.id)} className="text-red-400 p-2"><i className="fas fa-trash"></i></button></div>))}
-        <div className="p-4 bg-dark-900 border-b border-dark-700"><div className="flex gap-2"><input type="text" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value.toUpperCase())} placeholder="Kode voucher?" className="flex-1 bg-dark-800 border border-dark-700 rounded-lg px-3 py-2 text-white uppercase" /><button onClick={handleApplyVoucher} className="bg-secondary text-white px-4 py-2 rounded-lg text-sm">Pakai</button></div>{appliedVoucher && <div className="mt-2 text-green-400 text-sm">Voucher aktif!</div>}</div>
-        <div className="p-4 bg-dark-900 space-y-2"><div className="flex justify-between text-gray-400 text-sm"><span>Subtotal</span><span>Rp {subTotal.toLocaleString()}</span></div>{appliedVoucher && <div className="flex justify-between text-green-400 text-sm"><span>Diskon</span><span>-Rp {discountAmount.toLocaleString()}</span></div>}<div className="flex justify-between border-t border-dark-700 pt-2 mt-2"><span className="text-gray-300">Total</span><span className="text-xl font-bold text-white">Rp {total.toLocaleString()}</span></div></div>
-      </div>
-      <h2 className="text-lg font-bold text-white mb-3">Pilih Pembayaran</h2>
-      <div className="grid gap-3 mb-6">
-        {activePaymentMethods.length === 0 ? (
-            <div className="p-4 bg-dark-800 rounded-xl border border-red-500/20 text-red-400 text-sm text-center">Belum ada metode pembayaran yang tersedia.</div>
-        ) : (
-            activePaymentMethods.map(pm => (
-                <div key={pm.id} onClick={() => setSelectedPayment(pm.id)} className={`cursor-pointer p-4 rounded-xl border flex items-center justify-between transition-colors ${selectedPayment === pm.id ? 'bg-primary/20 border-primary' : 'bg-dark-800 border-dark-700 hover:bg-dark-700'}`}>
-                    <div className="flex items-center gap-3">
-                        {pm.logo && <img src={pm.logo} alt={pm.type} className="w-8 h-8 object-contain bg-white rounded p-0.5" />}
-                        <div>
-                            <span className="font-medium text-white block">{pm.name}</span>
-                            {pm.type === 'BANK' && <span className="text-xs text-gray-400">{pm.accountNumber}</span>}
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pb-24">
+       <div className="lg:col-span-2 space-y-4">
+          <h2 className="text-2xl font-bold text-white mb-4">Keranjang Belanja</h2>
+          {cart.map(item => (
+            <div key={item.id} className="bg-dark-800 p-4 rounded-xl border border-dark-700 flex gap-4">
+              <img src={item.image} className="w-20 h-20 object-cover rounded-lg" alt={item.name} />
+              <div className="flex-1">
+                <h3 className="font-bold text-white">{item.name}</h3>
+                <p className="text-sm text-gray-400">{item.category}</p>
+                <div className="mt-2 flex justify-between items-center">
+                   <span className="font-bold text-primary">Rp {(item.discountPrice || item.price).toLocaleString()}</span>
+                   <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-300 text-sm"><i className="fas fa-trash"></i> Hapus</button>
+                </div>
+              </div>
+            </div>
+          ))}
+       </div>
+
+       <div className="bg-dark-800 p-6 rounded-xl border border-dark-700 h-fit space-y-6">
+          <h3 className="text-xl font-bold text-white">Informasi Pesanan</h3>
+          <div className="space-y-3">
+             <input type="text" placeholder="Nama Lengkap" value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full bg-dark-900 border border-dark-700 rounded p-3 text-white" />
+             <input type="text" placeholder="Nomor WhatsApp (08...)" value={customerWhatsapp} onChange={e => setCustomerWhatsapp(e.target.value)} className="w-full bg-dark-900 border border-dark-700 rounded p-3 text-white" />
+          </div>
+
+          <div>
+             <label className="block text-sm text-gray-400 mb-2">Metode Pembayaran</label>
+             <div className="grid grid-cols-1 gap-2">
+                {activePayments.map(p => (
+                   <button key={p.id} onClick={() => setSelectedPayment(p.id)} className={`p-3 rounded-lg border text-left transition-all ${selectedPayment === p.id ? 'bg-primary/20 border-primary text-white' : 'bg-dark-900 border-dark-700 text-gray-400 hover:bg-dark-700'}`}>
+                      <span className="block font-bold text-sm">{p.name}</span>
+                      <span className="text-xs">{p.type}</span>
+                   </button>
+                ))}
+             </div>
+          </div>
+
+          {/* Voucher */}
+          <div>
+              <label className="block text-sm text-gray-400 mb-2">Kode Voucher</label>
+              <div className="flex gap-2">
+                  <input type="text" placeholder="Masukan kode..." value={voucherInput} onChange={e => setVoucherInput(e.target.value)} className="flex-1 bg-dark-900 border border-dark-700 rounded p-2 text-white uppercase" />
+                  <button onClick={handleApplyVoucher} className="bg-dark-700 text-white px-3 py-2 rounded hover:bg-dark-600">Pakai</button>
+              </div>
+          </div>
+
+          <div className="border-t border-dark-700 pt-4 space-y-2">
+             <div className="flex justify-between text-gray-400"><span>Subtotal</span><span>Rp {subtotal.toLocaleString()}</span></div>
+             {appliedVoucher && <div className="flex justify-between text-green-400"><span>Diskon ({appliedVoucher.code})</span><span>-Rp {discountAmount.toLocaleString()}</span></div>}
+             <div className="flex justify-between text-white font-bold text-lg pt-2"><span>Total</span><span>Rp {total.toLocaleString()}</span></div>
+          </div>
+
+          <button onClick={handleCheckout} className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-green-500/20 transition-all">
+             Checkout via WhatsApp <i className="fab fa-whatsapp ml-2"></i>
+          </button>
+       </div>
+    </div>
+  );
+};
+
+const CustomerHistory: React.FC = () => {
+    const { orders, user } = useAppContext();
+    // Filter orders by current user phone
+    const myOrders = orders.filter(o => o.customerWhatsapp === user?.phone).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    return (
+        <div className="max-w-3xl mx-auto pb-24">
+            <h2 className="text-2xl font-bold text-white mb-6">Riwayat Pesanan</h2>
+            <div className="space-y-4">
+                {myOrders.length === 0 ? <p className="text-gray-500 text-center">Belum ada riwayat pesanan.</p> : myOrders.map(order => (
+                    <div key={order.id} className="bg-dark-800 p-4 rounded-xl border border-dark-700">
+                        <div className="flex justify-between items-start mb-2">
+                            <div>
+                                <span className="text-xs text-gray-500">{new Date(order.date).toLocaleDateString()}</span>
+                                <h4 className="font-bold text-white text-lg">Rp {order.total.toLocaleString()}</h4>
+                            </div>
+                            <span className={`px-2 py-1 rounded text-xs font-bold ${order.status === 'COMPLETED' ? 'bg-green-500/20 text-green-400' : 'bg-yellow-500/20 text-yellow-400'}`}>{order.status}</span>
+                        </div>
+                        <div className="border-t border-dark-700 my-2 pt-2">
+                            {order.items.map((item, idx) => (
+                                <div key={idx} className="text-sm text-gray-300 flex justify-between">
+                                    <span>{item.name} x{item.quantity}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
-                    {selectedPayment === pm.id && <i className="fas fa-check-circle text-primary"></i>}
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const CustomerAccount: React.FC = () => {
+    const { user, logout } = useAppContext();
+    if (!user) return <Navigate to="/login" />;
+
+    return (
+        <div className="max-w-md mx-auto p-6 bg-dark-800 rounded-xl border border-dark-700">
+            <div className="text-center mb-6">
+                <div className="w-20 h-20 bg-primary/20 text-primary rounded-full flex items-center justify-center mx-auto mb-4 text-3xl font-bold">
+                    {user.name.charAt(0)}
                 </div>
-            ))
-        )}
-      </div>
-      <button onClick={handleCheckout} className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2"><i className="fab fa-whatsapp text-xl"></i> Konfirmasi Pesanan</button>
-    </div>
-  );
-};
-
-const AccountView: React.FC = () => {
-  const { user, logout } = useAppContext();
-  const navigate = useNavigate();
-  if (!user) return <Navigate to="/login" />;
-  const handleLogout = () => { logout(); navigate('/'); };
-  return (
-    <div className="max-w-md mx-auto p-6 pb-24">
-      <div className="bg-dark-800 rounded-xl border border-dark-700 p-6 text-center">
-        <div className="w-24 h-24 bg-primary rounded-full mx-auto flex items-center justify-center mb-4"><i className="fas fa-user text-4xl text-white"></i></div>
-        <h2 className="text-2xl font-bold text-white mb-1">{user.name}</h2>
-        <p className="text-primary text-sm font-semibold mb-6 uppercase">{user.role}</p>
-        <div className="space-y-3">
-          {user.role === 'ADMIN' && <Link to="/admin" className="block w-full bg-dark-700 hover:bg-dark-600 text-white py-3 rounded-xl border border-dark-600"><i className="fas fa-cogs mr-2"></i> Ke Panel Admin</Link>}
-          {user.role === 'AFFILIATE' && <Link to="/affiliate" className="block w-full bg-blue-600 hover:bg-blue-500 text-white py-3 rounded-xl border border-blue-500"><i className="fas fa-chart-line mr-2"></i> Dashboard Afiliasi</Link>}
-          {user.role === 'CUSTOMER' && <Link to="/history" className="block w-full bg-dark-700 hover:bg-dark-600 text-white py-3 rounded-xl border border-dark-600"><i className="fas fa-history mr-2"></i> Riwayat Pesanan</Link>}
-          <button onClick={handleLogout} className="block w-full bg-red-500/10 hover:bg-red-500/20 text-red-500 py-3 rounded-xl border border-red-500/20"><i className="fas fa-sign-out-alt mr-2"></i> Keluar</button>
+                <h2 className="text-xl font-bold text-white">{user.name}</h2>
+                <p className="text-gray-400">{user.phone}</p>
+                <div className="mt-2 inline-block px-3 py-1 bg-dark-700 rounded text-xs text-gray-300">{user.role}</div>
+            </div>
+            
+            <div className="space-y-3">
+                <Link to="/history" className="block w-full text-center bg-dark-700 hover:bg-dark-600 text-white py-2 rounded-lg">Riwayat Pesanan</Link>
+                <button onClick={logout} className="w-full bg-red-500/10 text-red-400 hover:bg-red-500/20 py-2 rounded-lg">Keluar</button>
+            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 };
 
-const CustomerLayout: React.FC = () => {
-  const { cart, user, isCloudConnected, debugDataCount } = useAppContext();
-  const location = useLocation();
-  return (
-    <div className="min-h-screen bg-dark-900 text-gray-100 font-sans">
-      <nav className="sticky top-0 z-40 bg-dark-900/80 backdrop-blur-md border-b border-dark-700">
-        <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-16">
-          <Link to="/" className="flex items-center gap-2"><div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center"><i className="fas fa-bolt text-white"></i></div><span className="font-bold text-xl tracking-tight text-white">DigiStore</span></Link>
-          <div className="flex items-center gap-4">
-             <div className="hidden md:flex items-center gap-6 mr-4"><Link to="/" className="text-gray-300 hover:text-white">Produk</Link></div>
-            <Link to="/cart" className="relative p-2 text-gray-300 hover:text-white"><i className="fas fa-shopping-cart text-xl"></i>{cart.length > 0 && <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/4 -translate-y-1/4 bg-red-500 rounded-full">{cart.length}</span>}</Link>
-            {user ? <Link to="/account" className="hidden md:flex items-center gap-2 text-gray-300 hover:text-white"><i className="fas fa-user-circle text-xl"></i></Link> : <Link to="/login" className="hidden md:block bg-primary px-4 py-2 rounded-lg text-sm font-medium text-white">Login</Link>}
-          </div>
-        </div>
-      </nav>
-      <div className="min-h-screen"><Routes><Route path="/" element={<CustomerHome />} /><Route path="/cart" element={<CustomerCart />} /><Route path="/categories" element={<CustomerHome />} /><Route path="/account" element={<AccountView />} /><Route path="/affiliate" element={user?.role === 'AFFILIATE' ? <div className="p-6">Dashboard Affiliate</div> : <Navigate to="/account" />} /><Route path="/history" element={<CustomerHistory />} /></Routes></div>
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-dark-800 border-t border-dark-700 pb-safe z-50">
-        <div className="grid grid-cols-4 h-16">
-          <Link to="/" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname === '/' ? 'text-primary' : 'text-gray-400'}`}><i className="fas fa-store mb-1"></i><span className="text-[10px] font-medium">Toko</span></Link>
-           <Link to="/categories" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname === '/categories' ? 'text-primary' : 'text-gray-400'}`}><i className="fas fa-th-large mb-1"></i><span className="text-[10px] font-medium">Kategori</span></Link>
-           <Link to="/history" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname === '/history' ? 'text-primary' : 'text-gray-400'}`}><i className="fas fa-history mb-1"></i><span className="text-[10px] font-medium">Riwayat</span></Link>
-          <Link to="/account" className={`flex flex-col items-center justify-center w-full h-full ${location.pathname.startsWith('/account') ? 'text-primary' : 'text-gray-400'}`}><i className="fas fa-user mb-1"></i><span className="text-[10px] font-medium">Akun</span></Link>
-        </div>
-        <div className="text-[10px] text-center pb-2 bg-dark-800 opacity-50 flex justify-center gap-2">{isCloudConnected ? <span className="text-green-500">● Cloud Connected</span> : <span>○ Local Mode</span>}<span className="text-gray-500">| Loaded: {debugDataCount} items</span></div>
-      </div>
-    </div>
-  );
-};
-
-const AdminLayout: React.FC = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const { logout, saveNotification } = useAppContext();
-  const navigate = useNavigate();
-
-  return (
-    <div className="flex h-screen bg-dark-900 text-gray-100 overflow-hidden">
-      <AdminSidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} activeTab={activeTab} setActiveTab={setActiveTab} onLogout={() => { logout(); navigate('/login'); }} />
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="md:hidden flex items-center justify-between bg-dark-800 p-4 border-b border-dark-700"><button onClick={() => setSidebarOpen(true)} className="text-gray-300"><i className="fas fa-bars text-xl"></i></button><span className="font-bold text-white">Admin Panel</span><div className="w-6"></div></header>
-        <main className="flex-1 overflow-y-auto bg-dark-900 relative">
-          {activeTab === 'dashboard' && <AdminDashboard />}
-          {activeTab === 'products' && <AdminProducts />}
-          {activeTab === 'customers' && <AdminCustomers />}
-          {activeTab === 'vouchers' && <AdminVouchers />}
-          {activeTab === 'affiliates' && <AdminAffiliates />}
-          {activeTab === 'settings' && <AdminSettings />}
-          {activeTab === 'database' && <AdminDatabase />}
-        </main>
-        {saveNotification && (<div className="fixed bottom-6 right-6 z-50 bg-primary text-white px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 animate-bounce"><i className="fas fa-cloud-upload-alt"></i><span className="font-medium">{saveNotification}</span></div>)}
-      </div>
-    </div>
-  );
-};
-
-const Login: React.FC = () => {
-  const { login, affiliates, settings, customers, updateCustomers } = useAppContext();
-  const [isRegister, setIsRegister] = useState(false);
+const AuthPage: React.FC = () => {
+  const { login, settings, customers, updateCustomers, customers: allCustomers } = useAppContext();
+  const [isLogin, setIsLogin] = useState(true);
+  const [role, setRole] = useState<'ADMIN'|'CUSTOMER'|'AFFILIATE'>('CUSTOMER');
+  
+  // Login Form
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+
+  // Register Form
+  const [regName, setRegName] = useState('');
+  const [regWa, setRegWa] = useState('');
+  const [regPass, setRegPass] = useState('');
+
   const navigate = useNavigate();
 
-  const handleAuth = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Register Flow
-    if (isRegister) {
-        if (!username || !password || !name) return alert("Semua kolom wajib diisi.");
-        if (customers.find(c => c.whatsapp === username)) return alert("Nomor WhatsApp sudah terdaftar.");
-        
-        const newCustomer: Customer = {
-            id: generateUUID(),
-            name: name,
-            whatsapp: username,
-            password: password,
-            createdAt: new Date().toISOString()
-        };
-        updateCustomers([...customers, newCustomer]);
-        alert("Pendaftaran berhasil! Silakan login.");
-        setIsRegister(false);
-        setPassword('');
-        return;
+  const handleLogin = () => {
+    if (role === 'ADMIN') {
+        // Use credentials from settings (or default)
+        const validUser = settings.adminUsername || 'admin';
+        const validPass = settings.adminPassword || 'admin';
+        if (username === validUser && password === validPass) {
+             login('ADMIN', 'Administrator');
+             navigate('/admin/dashboard');
+        } else {
+            alert("Username/Password Admin salah!");
+        }
+    } else if (role === 'CUSTOMER') {
+        const cust = allCustomers.find(c => c.whatsapp === username && c.password === password);
+        if (cust) {
+            login('CUSTOMER', cust.name, cust.id, cust.whatsapp);
+            navigate('/');
+        } else {
+            alert("Nomor WA atau Password salah. Silakan daftar jika belum punya akun.");
+        }
+    } else {
+        // Affiliate logic (simple)
+        const aff = DataService.getAffiliates().find(a => a.code === username && a.password === password);
+        if (aff) {
+            login('AFFILIATE', aff.name, aff.id);
+            navigate('/'); // or affiliate dashboard
+        } else {
+            alert("Kode/Password afiliasi salah");
+        }
     }
+  };
 
-    // Login Flow
-    // 1. Check Admin (Dynamic from Settings)
-    const adminUser = settings.adminUsername || 'admin';
-    const adminPass = settings.adminPassword || 'admin';
-    if (username === adminUser && password === adminPass) {
-      login('ADMIN', 'Admin User');
-      navigate('/admin');
-      return;
-    }
-
-    // 2. Check Affiliates
-    const affiliate = affiliates.find(a => a.code === username.toUpperCase() && a.password === password);
-    if (affiliate) {
-        if (!affiliate.isActive) return alert("Akun affiliate non-aktif.");
-        login('AFFILIATE', affiliate.name, affiliate.id);
-        navigate('/account');
-        return;
-    }
-
-    // 3. Check Customers
-    const customer = customers.find(c => c.whatsapp === username && c.password === password);
-    if (customer) {
-        login('CUSTOMER', customer.name, customer.id, customer.whatsapp);
-        navigate('/');
-        return;
-    }
-
-    alert('Login Gagal. Periksa Username/No WA dan Password.');
+  const handleRegister = () => {
+      if (!regName || !regWa || !regPass) return alert("Isi semua data!");
+      if (allCustomers.find(c => c.whatsapp === regWa)) return alert("Nomor WA sudah terdaftar!");
+      
+      const newCust: Customer = {
+          id: generateUUID(),
+          name: regName,
+          whatsapp: regWa,
+          password: regPass,
+          createdAt: new Date().toISOString()
+      };
+      updateCustomers([...allCustomers, newCust]);
+      alert("Pendaftaran berhasil! Silakan login.");
+      setIsLogin(true);
   };
 
   return (
-    <div className="min-h-screen bg-dark-900 flex items-center justify-center p-4">
-      <div className="bg-dark-800 p-8 rounded-2xl shadow-2xl border border-dark-700 w-full max-w-md">
-        <div className="text-center mb-8"><div className="w-16 h-16 bg-primary rounded-xl mx-auto flex items-center justify-center mb-4 shadow-lg"><i className="fas fa-bolt text-3xl text-white"></i></div><h1 className="text-2xl font-bold text-white">{isRegister ? 'Daftar Akun' : 'Masuk'}</h1></div>
-        <form onSubmit={handleAuth} className="space-y-6">
-          {isRegister && <div><label className="block text-sm text-gray-400 mb-1">Nama Lengkap</label><input type="text" value={name} onChange={e => setName(e.target.value)} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-3 text-white" /></div>}
-          <div><label className="block text-sm text-gray-400 mb-1">{isRegister ? 'Nomor WhatsApp' : 'Username / No. WA'}</label><input type="text" value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-3 text-white" /></div>
-          <div><label className="block text-sm text-gray-400 mb-1">Password</label><input type="password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-3 text-white" /></div>
-          <button type="submit" className="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-3 rounded-xl shadow-lg">{isRegister ? 'Daftar Sekarang' : 'Masuk'}</button>
-        </form>
-        <div className="mt-6 text-center text-sm">
-            {isRegister ? (
-                <span className="text-gray-500">Sudah punya akun? <button onClick={() => setIsRegister(false)} className="text-primary hover:underline">Login disini</button></span>
-            ) : (
-                <span className="text-gray-500">Belum punya akun? <button onClick={() => setIsRegister(true)} className="text-primary hover:underline">Daftar disini</button></span>
-            )}
+    <div className="min-h-screen flex items-center justify-center bg-dark-900 p-4">
+      <div className="bg-dark-800 p-8 rounded-2xl border border-dark-700 w-full max-w-md shadow-2xl">
+        <div className="text-center mb-8">
+           <h1 className="text-3xl font-bold text-white mb-2">{settings.storeName}</h1>
+           <p className="text-gray-400">{isLogin ? 'Masuk ke akun Anda' : 'Daftar Akun Baru'}</p>
         </div>
-        <div className="mt-4 text-center"><Link to="/" className="text-gray-500 hover:text-white text-sm">Kembali ke Toko</Link></div>
+
+        {isLogin ? (
+            <>
+                <div className="flex bg-dark-900 rounded-lg p-1 mb-6">
+                    {(['CUSTOMER', 'AFFILIATE', 'ADMIN'] as const).map(r => (
+                        <button key={r} onClick={() => setRole(r)} className={`flex-1 py-2 text-xs font-bold rounded-md transition-all ${role === r ? 'bg-primary text-white shadow' : 'text-gray-400 hover:text-white'}`}>
+                            {r}
+                        </button>
+                    ))}
+                </div>
+                <div className="space-y-4">
+                    <input type="text" placeholder={role === 'ADMIN' ? 'Username' : (role === 'AFFILIATE' ? 'Kode Afiliasi' : 'Nomor WhatsApp')} value={username} onChange={e => setUsername(e.target.value)} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-3 text-white focus:border-primary outline-none" />
+                    <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-3 text-white focus:border-primary outline-none" />
+                    <button onClick={handleLogin} className="w-full bg-primary hover:bg-indigo-600 text-white font-bold py-3 rounded-lg transition-all">Masuk</button>
+                </div>
+                {role === 'CUSTOMER' && (
+                    <div className="mt-6 text-center text-sm">
+                        <span className="text-gray-400">Belum punya akun? </span>
+                        <button onClick={() => setIsLogin(false)} className="text-primary hover:underline font-bold">Daftar Sekarang</button>
+                    </div>
+                )}
+            </>
+        ) : (
+            <div className="space-y-4">
+                <input type="text" placeholder="Nama Lengkap" value={regName} onChange={e => setRegName(e.target.value)} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-3 text-white" />
+                <input type="text" placeholder="Nomor WhatsApp" value={regWa} onChange={e => setRegWa(e.target.value)} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-3 text-white" />
+                <input type="password" placeholder="Buat Password" value={regPass} onChange={e => setRegPass(e.target.value)} className="w-full bg-dark-900 border border-dark-700 rounded-lg px-4 py-3 text-white" />
+                <button onClick={handleRegister} className="w-full bg-secondary hover:bg-purple-600 text-white font-bold py-3 rounded-lg transition-all">Daftar</button>
+                <div className="mt-4 text-center text-sm">
+                    <button onClick={() => setIsLogin(true)} className="text-gray-400 hover:text-white">Kembali ke Login</button>
+                </div>
+            </div>
+        )}
       </div>
     </div>
   );
 };
 
-const AppContent: React.FC = () => {
-  const { user } = useAppContext();
-  return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/admin/*" element={user?.role === 'ADMIN' ? <AdminLayout /> : <Navigate to="/login" />} />
-      <Route path="/*" element={<CustomerLayout />} />
-    </Routes>
-  );
-};
+// --- App Container ---
 
-export default function App() {
+const App: React.FC = () => {
   const [settings, setSettings] = useState<StoreSettings>(DataService.getSettings());
   const [products, setProducts] = useState<Product[]>(DataService.getProducts());
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [user, setUser] = useState<User | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>(DataService.getPayments());
   const [vouchers, setVouchers] = useState<Voucher[]>(DataService.getVouchers());
   const [affiliates, setAffiliates] = useState<Affiliate[]>(DataService.getAffiliates());
   const [customers, setCustomers] = useState<Customer[]>(DataService.getCustomers());
   const [orders, setOrders] = useState<Order[]>(DataService.getOrders());
-  
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [user, setUser] = useState<User | null>(null);
   const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [supabase, setSupabase] = useState<SupabaseClient | null>(null);
   const [isCloudConnected, setIsCloudConnected] = useState(false);
-  const [debugDataCount, setDebugDataCount] = useState(0);
-  const [fetchError, setFetchError] = useState<string | null>(null);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [saveNotification, setSaveNotification] = useState<string | null>(null);
 
-  const supabase = useMemo(() => {
+  // Initialize Supabase
+  useEffect(() => {
     if (settings.supabaseUrl && settings.supabaseKey) {
-      try { return createClient(settings.supabaseUrl, settings.supabaseKey); } catch (e) { console.error(e); return null; }
+        try {
+            const client = createClient(settings.supabaseUrl, settings.supabaseKey);
+            setSupabase(client);
+            setIsCloudConnected(true);
+        } catch (e) {
+            console.error("Invalid Supabase config", e);
+            setIsCloudConnected(false);
+        }
     }
-    return null;
   }, [settings.supabaseUrl, settings.supabaseKey]);
 
-  useEffect(() => {
-    if (!supabase) { setIsDataLoaded(true); return; }
-    const fetchData = async () => {
-      setFetchError(null);
+  // Fetch Data from Supabase
+  const fetchData = async () => {
+      if (!supabase) return;
       try {
-          const { data: prodData } = await supabase.from('products').select('*');
-          if (prodData) {
-            const mappedProducts = prodData.map((p: any) => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: Number(p.price), discountPrice: p.discount_price ? Number(p.discount_price) : undefined, image: p.image, fileUrl: p.file_url, isPopular: p.is_popular }));
-            setProducts(mappedProducts); DataService.saveProducts(mappedProducts);
-          }
-          const { data: vouchData } = await supabase.from('vouchers').select('*');
-          if (vouchData) {
-            const mappedVouchers = vouchData.map((v: any) => ({ id: v.id, code: v.code, type: v.type, value: Number(v.value), isActive: v.is_active }));
-            setVouchers(mappedVouchers); DataService.saveVouchers(mappedVouchers);
-          }
-          const { data: affData } = await supabase.from('affiliates').select('*');
-          if (affData) {
-            const mappedAff = affData.map((a: any) => ({ id: a.id, name: a.name, code: a.code, password: a.password, commissionRate: Number(a.commission_rate), totalEarnings: Number(a.total_earnings), bankDetails: a.bank_details, isActive: a.is_active }));
-            setAffiliates(mappedAff); DataService.saveAffiliates(mappedAff);
-          }
-          const { data: custData } = await supabase.from('customers').select('*');
-          if (custData) {
-            const mappedCust = custData.map((c: any) => ({ id: c.id, name: c.name, whatsapp: c.whatsapp, password: c.password, createdAt: c.created_at }));
-            setCustomers(mappedCust); DataService.saveCustomers(mappedCust);
-          }
-          const { data: settingsData } = await supabase.from('store_settings').select('*').single();
-          if (settingsData) {
-             const newSettings: StoreSettings = { ...settings, storeName: settingsData.store_name, address: settingsData.address, whatsapp: settingsData.whatsapp, email: settingsData.email, description: settingsData.description, logoUrl: settingsData.logo_url, tripayApiKey: settingsData.tripay_api_key, tripayPrivateKey: settingsData.tripay_private_key, tripayMerchantCode: settingsData.tripay_merchant_code, adminUsername: settingsData.admin_username, adminPassword: settingsData.admin_password };
-             setSettings(newSettings); DataService.saveSettings(newSettings);
-          }
-          const { data: payData } = await supabase.from('payment_methods').select('*');
-          if (payData) {
-              const mappedPayments = payData.map((p: any) => ({ 
-                  id: p.id, 
-                  type: (p.type || 'BANK').toUpperCase().trim(), // Force Uppercase & Fallback
-                  name: p.name, 
-                  accountNumber: p.account_number, 
-                  accountName: p.account_name, 
-                  description: p.description, 
-                  logo: p.logo, 
-                  isActive: !!p.is_active // FORCE BOOLEAN
-              }));
-              setPaymentMethods(mappedPayments); DataService.savePayments(mappedPayments);
-          }
-          // Fetch Orders (New)
-          const { data: orderData } = await supabase.from('orders').select('*');
-          if (orderData) {
-             const mappedOrders = orderData.map((o: any) => ({ id: o.id, customerName: o.customer_name, customerWhatsapp: o.customer_whatsapp, total: Number(o.total), paymentMethod: o.payment_method, status: o.status, items: o.items, voucherCode: o.voucher_code, discountAmount: Number(o.discount_amount), date: o.created_at }));
-             setOrders(mappedOrders); DataService.saveOrders(mappedOrders);
-          }
+          const [pRes, sRes, payRes, vRes, aRes, cRes] = await Promise.all([
+              supabase.from('products').select('*'),
+              supabase.from('store_settings').select('*').limit(1),
+              supabase.from('payment_methods').select('*'),
+              supabase.from('vouchers').select('*'),
+              supabase.from('affiliates').select('*'),
+              supabase.from('customers').select('*')
+          ]);
+
+          if (pRes.error) throw pRes.error;
+
+          // Mapping logic (Snake Case DB -> Camel Case App)
+          if (pRes.data) setProducts(pRes.data);
           
-          setIsCloudConnected(true); setDebugDataCount(prodData ? prodData.length : 0);
-      } catch (err: any) { console.error(err); setFetchError(err.message); } finally { setIsDataLoaded(true); }
-    };
-    fetchData();
-  }, [supabase]);
+          if (sRes.data && sRes.data.length > 0) {
+              const s = sRes.data[0];
+              setSettings({
+                  ...settings, // Keep local secrets if needed, or overwrite
+                  storeName: s.store_name,
+                  address: s.address,
+                  whatsapp: s.whatsapp,
+                  email: s.email,
+                  description: s.description,
+                  logoUrl: s.logo_url,
+                  adminUsername: s.admin_username,
+                  adminPassword: s.admin_password
+              });
+          }
 
-  // Auto-Sync Logic
-  const shouldSync = isCloudConnected && isDataLoaded && user?.role === 'ADMIN';
+          if (payRes.data) {
+              setPaymentMethods(payRes.data.map((p: any) => ({
+                  ...p,
+                  accountNumber: p.account_number,
+                  accountName: p.account_name,
+                  isActive: p.is_active // Map snake to camel
+              })));
+          }
 
-  const useAutoSync = (data: any, table: string, mapper: (item: any) => any, saveLocal: (d: any) => void) => {
-    useEffect(() => {
-        if (!shouldSync || !supabase) return;
-        const timer = setTimeout(async () => {
-            setSaveNotification(`Saving ${table}...`);
-            await supabase.from(table).upsert(data.map(ensureUuid).map(mapper));
-            setSaveNotification(`${table} Saved!`); setTimeout(() => setSaveNotification(null), 2000);
-            saveLocal(data);
-        }, 2000);
-        return () => clearTimeout(timer);
-    }, [data, shouldSync, supabase]);
+          if (vRes.data) setVouchers(vRes.data.map((v: any) => ({ ...v, isActive: v.is_active })));
+          if (aRes.data) setAffiliates(aRes.data.map((a: any) => ({ ...a, commissionRate: a.commission_rate, totalEarnings: a.total_earnings, bankDetails: a.bank_details, isActive: a.is_active })));
+          if (cRes.data) setCustomers(cRes.data);
+
+          setIsDataLoaded(true);
+          setFetchError(null);
+      } catch (err: any) {
+          console.error("Fetch error:", err);
+          // RLS Policy error detection
+          if (err.message?.includes("policy") || err.code === "42501") {
+             setFetchError("Database Policies (RLS) not set. Please run the SQL Schema again.");
+          } else {
+             setFetchError(err.message);
+          }
+      }
   };
 
-  useAutoSync(products, 'products', p => ({ id: p.id, name: p.name, category: p.category, description: p.description, price: p.price, discount_price: p.discountPrice, image: p.image, file_url: p.fileUrl, is_popular: p.isPopular }), DataService.saveProducts);
-  useAutoSync(vouchers, 'vouchers', v => ({ id: v.id, code: v.code, type: v.type, value: v.value, is_active: v.isActive }), DataService.saveVouchers);
-  useAutoSync(affiliates, 'affiliates', a => ({ id: a.id, name: a.name, code: a.code, password: a.password, commission_rate: a.commissionRate, total_earnings: a.totalEarnings, bank_details: a.bankDetails, is_active: a.isActive }), DataService.saveAffiliates);
-  useAutoSync(customers, 'customers', c => ({ id: c.id, name: c.name, whatsapp: c.whatsapp, password: c.password, created_at: c.createdAt }), DataService.saveCustomers);
-  useAutoSync(orders, 'orders', o => ({ id: o.id, customer_name: o.customerName, customer_whatsapp: o.customerWhatsapp, total: o.total, payment_method: o.paymentMethod, status: o.status, items: o.items, voucher_code: o.voucherCode, discount_amount: o.discountAmount, created_at: o.date }), DataService.saveOrders);
-
-  // Settings & Payments Special Sync
+  // Initial Fetch
   useEffect(() => {
-    if (!shouldSync || !supabase) return;
-    const timer = setTimeout(async () => {
-        setSaveNotification("Saving Settings...");
-        const dbSettings = { id: 'settings_01', store_name: settings.storeName, address: settings.address, whatsapp: settings.whatsapp, email: settings.email, description: settings.description, logo_url: settings.logoUrl, tripay_api_key: settings.tripayApiKey, tripay_private_key: settings.tripayPrivateKey, tripay_merchant_code: settings.tripayMerchantCode, admin_username: settings.adminUsername, admin_password: settings.adminPassword };
-        await supabase.from('store_settings').upsert(dbSettings);
-        
-        // Ensure boolean isActive
-        const dbPayments = paymentMethods.map(ensureUuid).map(p => ({ 
-            id: p.id, 
-            type: p.type, 
-            name: p.name, 
-            account_number: p.accountNumber, 
-            account_name: p.accountName, 
-            description: p.description, 
-            logo: p.logo, 
-            is_active: !!p.isActive 
-        }));
-        await supabase.from('payment_methods').upsert(dbPayments);
-        setSaveNotification("Settings Saved!"); setTimeout(() => setSaveNotification(null), 2000);
-        DataService.saveSettings(settings); DataService.savePayments(paymentMethods);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [settings, paymentMethods, shouldSync, supabase]);
+      if (supabase && !isDataLoaded) {
+          fetchData();
+      }
+  }, [supabase, isDataLoaded]);
 
-  const addToCart = (product: Product) => {
-    setCart(prev => {
-      const existing = prev.find(p => p.id === product.id);
-      return existing ? prev.map(p => p.id === product.id ? { ...p, quantity: p.quantity + 1 } : p) : [...prev, { ...product, quantity: 1 }];
-    });
+  // Auto-Save Logic (Debounced)
+  const isFirstRun = useRef(true);
+  useEffect(() => {
+      if (isFirstRun.current) { isFirstRun.current = false; return; }
+      if (!supabase || !isDataLoaded) return; // Don't overwrite cloud with initial empty state if loading
+      if (user?.role !== 'ADMIN') return; // Only admin saves config changes
+
+      const timer = setTimeout(async () => {
+          setSaveNotification("Saving to cloud...");
+          try {
+             const payPayload = paymentMethods.map(p => ({ ...ensureUuid(p), is_active: p.isActive, account_number: p.accountNumber, account_name: p.accountName }));
+             const prodPayload = products.map(ensureUuid);
+             const vouchPayload = vouchers.map(v => ({ ...ensureUuid(v), is_active: v.isActive }));
+             const affPayload = affiliates.map(a => ({ ...ensureUuid(a), is_active: a.isActive, commission_rate: a.commissionRate, total_earnings: a.totalEarnings, bank_details: a.bankDetails }));
+             
+             // Settings Mapping
+             const setPayload = {
+                 ...ensureUuid(settings),
+                 store_name: settings.storeName,
+                 logo_url: settings.logoUrl,
+                 admin_username: settings.adminUsername,
+                 admin_password: settings.adminPassword,
+                 // other snake_case fields handled by spread if keys match, else manual map
+             };
+
+             await Promise.all([
+                 supabase.from('products').upsert(prodPayload),
+                 supabase.from('payment_methods').upsert(payPayload),
+                 supabase.from('vouchers').upsert(vouchPayload),
+                 supabase.from('affiliates').upsert(affPayload),
+                 supabase.from('store_settings').upsert(setPayload),
+                 // Customers are saved on registration separately
+             ]);
+             setSaveNotification("Saved ✔");
+             setTimeout(() => setSaveNotification(null), 2000);
+          } catch (e) {
+              console.error("Auto save failed", e);
+              setSaveNotification("Save Failed ❌");
+          }
+      }, 1000); // 1 sec debounce
+
+      return () => clearTimeout(timer);
+  }, [products, paymentMethods, vouchers, affiliates, settings, supabase, isDataLoaded, user]);
+
+  // --- Local Storage Fallback (Sync State to LS) ---
+  useEffect(() => { DataService.saveSettings(settings); }, [settings]);
+  useEffect(() => { DataService.saveProducts(products); }, [products]);
+  useEffect(() => { DataService.savePayments(paymentMethods); }, [paymentMethods]);
+  useEffect(() => { DataService.saveVouchers(vouchers); }, [vouchers]);
+  useEffect(() => { DataService.saveAffiliates(affiliates); }, [affiliates]);
+  useEffect(() => { DataService.saveCustomers(customers); }, [customers]);
+  useEffect(() => { DataService.saveOrders(orders); }, [orders]);
+
+  const contextValue = {
+    settings, updateSettings: setSettings,
+    products, updateProducts: setProducts,
+    cart,
+    addToCart: (p: Product) => {
+        setCart(prev => {
+            const exist = prev.find(i => i.id === p.id);
+            return exist ? prev.map(i => i.id === p.id ? { ...i, quantity: i.quantity + 1 } : i) : [...prev, { ...p, quantity: 1 }];
+        });
+    },
+    removeFromCart: (id: string) => setCart(prev => prev.filter(i => i.id !== id)),
+    clearCart: () => setCart([]),
+    user,
+    login: (role: any, name: string, id?: string, phone?: string) => setUser({ role, name, id, phone }),
+    logout: () => { setUser(null); setCart([]); },
+    paymentMethods, updatePayments: setPaymentMethods,
+    vouchers, updateVouchers: setVouchers,
+    affiliates, updateAffiliates: setAffiliates,
+    customers, updateCustomers: setCustomers,
+    orders, addOrder: (o: Order) => setOrders(prev => [o, ...prev]),
+    referralCode, setReferralCode,
+    supabase, isCloudConnected, debugDataCount: products.length,
+    resetLocalData: () => {
+        localStorage.clear();
+        window.location.reload();
+    },
+    fetchError, saveNotification
   };
-
-  const addOrder = (order: Order) => {
-    const newOrders = [order, ...orders];
-    setOrders(newOrders);
-    DataService.saveOrder(order); // Local fallback
-  };
-
-  const login = (role: 'ADMIN' | 'CUSTOMER' | 'AFFILIATE', name: string, id?: string, phone?: string) => setUser({ role, name, id, phone });
-  const resetLocalData = () => { localStorage.clear(); window.location.reload(); };
 
   return (
-    <AppContext.Provider value={{
-      settings, updateSettings: setSettings, products, updateProducts: setProducts, vouchers, updateVouchers: setVouchers, affiliates, updateAffiliates: setAffiliates, customers, updateCustomers: setCustomers, orders, addOrder, cart, addToCart, removeFromCart: (id) => setCart(p => p.filter(x => x.id !== id)), clearCart: () => setCart([]), user, login, logout: () => setUser(null), paymentMethods, updatePayments: setPaymentMethods, referralCode, setReferralCode, supabase, isCloudConnected, debugDataCount, resetLocalData, fetchError, saveNotification
-    }}>
+    <AppContext.Provider value={contextValue}>
       <Router>
-        <AppContent />
+        {saveNotification && (
+            <div className="fixed bottom-4 left-4 z-50 bg-black/80 text-white px-3 py-1 rounded-full text-xs font-mono border border-gray-700">
+                {saveNotification}
+            </div>
+        )}
+        <Routes>
+          <Route path="/login" element={<AuthPage />} />
+          
+          {/* Admin Routes */}
+          <Route path="/admin" element={user?.role === 'ADMIN' ? <AdminLayout><AdminDashboard /></AdminLayout> : <Navigate to="/login" />} />
+          <Route path="/admin/dashboard" element={user?.role === 'ADMIN' ? <AdminLayout><AdminDashboard /></AdminLayout> : <Navigate to="/login" />} />
+          <Route path="/admin/products" element={user?.role === 'ADMIN' ? <AdminLayout><AdminProducts /></AdminLayout> : <Navigate to="/login" />} />
+          <Route path="/admin/customers" element={user?.role === 'ADMIN' ? <AdminLayout><AdminCustomers /></AdminLayout> : <Navigate to="/login" />} />
+          <Route path="/admin/vouchers" element={user?.role === 'ADMIN' ? <AdminLayout><AdminVouchers /></AdminLayout> : <Navigate to="/login" />} />
+          <Route path="/admin/affiliates" element={user?.role === 'ADMIN' ? <AdminLayout><AdminAffiliates /></AdminLayout> : <Navigate to="/login" />} />
+          <Route path="/admin/settings" element={user?.role === 'ADMIN' ? <AdminLayout><AdminSettings /></AdminLayout> : <Navigate to="/login" />} />
+          <Route path="/admin/database" element={user?.role === 'ADMIN' ? <AdminLayout><AdminDatabase /></AdminLayout> : <Navigate to="/login" />} />
+
+          {/* Customer Routes */}
+          <Route path="/" element={<CustomerLayout><CustomerHome /></CustomerLayout>} />
+          <Route path="/cart" element={<CustomerLayout><CustomerCart /></CustomerLayout>} />
+          <Route path="/history" element={user ? <CustomerLayout><CustomerHistory /></CustomerLayout> : <Navigate to="/login" />} />
+          <Route path="/account" element={user ? <CustomerLayout><CustomerAccount /></CustomerLayout> : <Navigate to="/login" />} />
+        </Routes>
       </Router>
     </AppContext.Provider>
   );
-}
+};
+
+export default App;
