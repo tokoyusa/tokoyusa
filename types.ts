@@ -1,91 +1,79 @@
 
+export enum UserRole {
+  ADMIN = 'admin',
+  USER = 'user'
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  full_name?: string;
+  role: UserRole;
+  affiliate_code?: string;
+  referred_by?: string;
+  phone?: string;
+  balance?: number;
+  // User Bank Details for Withdrawal
+  bank_name?: string;
+  bank_number?: string;
+  bank_holder?: string;
+}
+
 export interface Product {
   id: string;
   name: string;
-  image: string; // URL
-  category: string;
   description: string;
   price: number;
-  discountPrice?: number;
-  fileUrl?: string; // Link to the digital product
-  isPopular?: boolean;
-}
-
-export interface PaymentMethod {
-  id: string;
-  type: 'BANK' | 'E-WALLET' | 'QRIS' | 'TRIPAY';
-  name: string;
-  accountNumber?: string;
-  accountName?: string;
-  description?: string;
-  logo?: string;
-  isActive?: boolean;
-}
-
-export interface StoreSettings {
-  storeName: string;
-  address: string;
-  whatsapp: string;
-  email: string;
-  description: string;
-  logoUrl: string;
-  supabaseUrl?: string;
-  supabaseKey?: string;
-  tripayApiKey?: string;
-  tripayPrivateKey?: string;
-  tripayMerchantCode?: string;
-  // Admin Auth
-  adminUsername?: string;
-  adminPassword?: string;
-}
-
-export interface CartItem extends Product {
-  quantity: number;
-}
-
-export interface User {
-  role: 'ADMIN' | 'CUSTOMER' | 'AFFILIATE';
-  name: string;
-  id?: string; // Used for affiliate linking or customer ID
-  phone?: string; // WhatsApp number for customers
-}
-
-export interface Customer {
-  id: string;
-  name: string;
-  whatsapp: string; // Unique ID used for login
-  password: string;
-  createdAt: string;
-}
-
-export interface Voucher {
-  id: string;
-  code: string;
-  type: 'FIXED' | 'PERCENT'; // Potongan Tetap (Rp) atau Persen (%)
-  value: number;
-  isActive: boolean;
+  discount_price?: number; // If set, this is the active price
+  category: string;
+  image_url: string;
+  file_url: string; // Link to download or access
+  is_active: boolean;
+  created_at?: string;
 }
 
 export interface Order {
   id: string;
-  items: CartItem[];
-  total: number;
-  customerName: string;
-  customerWhatsapp: string;
-  paymentMethod: string;
-  status: 'PENDING' | 'PAID' | 'COMPLETED';
-  date: string;
-  voucherCode?: string;
-  discountAmount?: number;
+  user_id: string;
+  total_amount: number;
+  status: 'pending' | 'paid' | 'failed' | 'completed';
+  payment_method: string;
+  payment_proof?: string;
+  items: OrderItem[];
+  created_at: string;
 }
 
-export interface Affiliate {
+export interface OrderItem {
   id: string;
-  name: string;
-  code: string; // Unique referral code
-  password: string; // Simple auth
-  commissionRate: number; // Percentage (e.g., 10 for 10%)
-  totalEarnings: number;
-  bankDetails: string; // Rekening untuk transfer komisi
-  isActive: boolean;
+  product_id: string;
+  product_name: string;
+  price: number;
+}
+
+export interface StoreSettings {
+  store_name: string;
+  store_description: string;
+  whatsapp_number: string;
+  email_contact: string;
+  address: string;
+  tripay_api_key?: string;
+  tripay_private_key?: string;
+  tripay_merchant_code?: string;
+  affiliate_commission_rate?: number; // Percentage (e.g., 10 for 10%)
+  bank_accounts: {
+    bank: string;
+    number: string;
+    name: string;
+  }[];
+  qris_url?: string; // Generated or uploaded QRIS image URL
+}
+
+export interface CartItem extends Product {
+  quantity: number; // usually 1 for digital products
+}
+
+// Supabase Local Config
+export interface SupabaseConfig {
+  url: string;
+  anonKey: string;
 }

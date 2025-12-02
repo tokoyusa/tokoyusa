@@ -1,5 +1,5 @@
 {
-  "name": "DigiStore Pro",
-  "description": "A comprehensive digital product store with Admin and Customer panels, dark mode, and integrated payment settings.",
+  "name": "DigitalStorePro",
+  "description": "Toko online produk digital dengan panel admin, integrasi Supabase, dan sistem pembayaran lengkap (Tripay, QRIS, Manual).",
   "requestFramePermissions": []
 }

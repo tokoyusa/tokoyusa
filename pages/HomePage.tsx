@@ -1,0 +1,167 @@
+
+import React, { useEffect, useState } from 'react';
+import { getSupabase } from '../services/supabase';
+import { Product, StoreSettings } from '../types';
+import { Search, ShoppingCart, ImageOff } from 'lucide-react';
+import { formatRupiah } from '../services/helpers';
+import { Link } from 'react-router-dom';
+
+interface HomePageProps {
+  addToCart: (product: Product) => void;
+  settings: StoreSettings;
+}
+
+const HomePage: React.FC<HomePageProps> = ({ addToCart, settings }) => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [categories, setCategories] = useState<string[]>(['All']);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      const supabase = getSupabase();
+      if (!supabase) return;
+
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        const validProducts = data as Product[];
+        setProducts(validProducts);
+        // Fix for type inference on categories
+        const categoryList = validProducts
+          .map((p) => p.category)
+          .filter((c): c is string => typeof c === 'string' && c.length > 0);
+        const uniqueCats = Array.from(new Set(categoryList));
+        setCategories(['All', ...uniqueCats]);
+      }
+      setLoading(false);
+    };
+
+    fetchProducts();
+  }, []);
+
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) &&
+    (categoryFilter === 'All' || p.category === categoryFilter)
+  );
+
+  return (
+    <div className="pb-12">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 rounded-2xl p-8 mb-8 text-center sm:text-left border border-slate-700 relative overflow-hidden">
+        <div className="relative z-10">
+          <h1 className="text-3xl md:text-5xl font-bold text-white mb-4">{settings.store_name}</h1>
+          <p className="text-slate-300 text-lg mb-6 max-w-2xl">{settings.store_description}</p>
+          <div className="inline-flex gap-2">
+            <button 
+              onClick={() => document.getElementById('products-grid')?.scrollIntoView({ behavior: 'smooth' })}
+              className="bg-primary hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-full transition-transform transform hover:scale-105"
+            >
+              Belanja Sekarang
+            </button>
+          </div>
+        </div>
+        <div className="absolute right-0 top-0 h-full w-1/3 bg-primary/10 skew-x-12 transform translate-x-12"></div>
+      </div>
+
+      {/* Search & Filter */}
+      <div className="flex flex-col md:flex-row gap-4 mb-8 items-center justify-between sticky top-20 z-40 bg-slate-900/90 py-2 backdrop-blur">
+        <div className="relative w-full md:w-1/3">
+          <Search className="absolute left-3 top-2.5 text-slate-400" size={20} />
+          <input
+            type="text"
+            placeholder="Cari produk..."
+            className="w-full bg-slate-800 border border-slate-700 rounded-full py-2 pl-10 pr-4 focus:ring-2 focus:ring-primary outline-none text-slate-200"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </div>
+        <div className="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0 no-scrollbar">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              className={`px-4 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors ${
+                categoryFilter === cat 
+                  ? 'bg-primary text-white' 
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Products Grid */}
+      <div id="products-grid">
+        {loading ? (
+           <div className="flex justify-center p-12"><div className="animate-spin h-8 w-8 border-2 border-primary rounded-full border-t-transparent"></div></div>
+        ) : filteredProducts.length === 0 ? (
+          <div className="text-center py-12 text-slate-500">
+            <p>Produk tidak ditemukan.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {filteredProducts.map(product => (
+              <div key={product.id} className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700 hover:border-primary transition-colors group flex flex-col h-full">
+                <div className="relative aspect-video overflow-hidden bg-slate-700 flex items-center justify-center">
+                  <img 
+                    src={product.image_url || 'https://via.placeholder.com/400x300?text=No+Image'} 
+                    alt={product.name} 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).onerror = null; // Prevent infinite loop
+                      (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Error+Loading';
+                    }}
+                  />
+                  {product.discount_price && (
+                    <div className="absolute top-2 right-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
+                      Promo
+                    </div>
+                  )}
+                </div>
+                <div className="p-4 flex-1 flex flex-col">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="text-xs text-primary font-medium uppercase tracking-wider">{product.category}</span>
+                  </div>
+                  <Link to={`/product/${product.id}`} className="block">
+                    <h3 className="text-lg font-bold text-slate-100 mb-2 line-clamp-2 hover:text-primary transition-colors">{product.name}</h3>
+                  </Link>
+                  <p className="text-slate-400 text-sm mb-4 line-clamp-2 flex-1">{product.description}</p>
+                  
+                  <div className="mt-auto">
+                    <div className="flex items-center gap-2 mb-3">
+                      {product.discount_price ? (
+                        <>
+                          <span className="text-xl font-bold text-white">{formatRupiah(product.discount_price)}</span>
+                          <span className="text-sm text-slate-500 line-through">{formatRupiah(product.price)}</span>
+                        </>
+                      ) : (
+                        <span className="text-xl font-bold text-white">{formatRupiah(product.price)}</span>
+                      )}
+                    </div>
+                    <button 
+                      onClick={() => addToCart(product)}
+                      className="w-full bg-slate-700 hover:bg-primary text-white py-2 rounded-lg flex items-center justify-center gap-2 transition-colors font-medium"
+                    >
+                      <ShoppingCart size={18} />
+                      Tambah
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default HomePage;
