@@ -68,7 +68,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
 
   const saveAll = () => {
     onUpdate(localSettings);
-    alert('Pengaturan disimpan!');
+    alert('Pengaturan disimpan! Jika Anda baru saja mengganti QRIS, mohon refresh halaman checkout untuk melihat perubahan.');
   };
 
   const resetDatabase = () => {
@@ -121,7 +121,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
         canvas.toBlob((blob) => {
           if (blob) resolve(blob);
           else reject(new Error('Canvas to Blob failed'));
-        }, 'image/jpeg', 0.5);
+        }, 'image/jpeg', 0.6); // Kompresi JPEG 60%
       };
       img.onerror = reject;
     });
@@ -129,26 +129,21 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
 
   const handleQrisUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !supabase) return;
+    if (!file) return;
 
     setUploading(true);
     try {
+      // 1. Resize gambar agar ringan (max lebar 400px)
       const resizedBlob = await resizeImage(file, 400);
-      const fileName = `qris_${Date.now()}.jpg`;
-
-      const { data, error } = await supabase.storage.from('images').upload(fileName, resizedBlob);
-
-      if (!error && data) {
-        const { data: { publicUrl } } = supabase.storage.from('images').getPublicUrl(fileName);
-        setLocalSettings(prev => ({ ...prev, qris_url: publicUrl }));
-      } else {
-        console.warn("QRIS Storage upload failed, using Base64 fallback.");
-        const base64 = await fileToBase64(resizedBlob);
-        setLocalSettings(prev => ({ ...prev, qris_url: base64 }));
-      }
+      
+      // 2. Convert langsung ke Base64 (tanpa upload ke Storage bucket)
+      // Ini menjamin gambar bisa diakses 100% tanpa masalah permission bucket
+      const base64 = await fileToBase64(resizedBlob);
+      
+      setLocalSettings(prev => ({ ...prev, qris_url: base64 }));
     } catch (err) {
-      console.error("Error uploading QRIS", err);
-      alert("Gagal memproses gambar.");
+      console.error("Error processing QRIS", err);
+      alert("Gagal memproses gambar. Pastikan format gambar valid (JPG/PNG).");
     } finally {
       setUploading(false);
     }
@@ -270,20 +265,18 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
                   </div>
                )}
                <div className="flex gap-2 items-center">
-                  <input 
-                    type="text" 
-                    className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-sm text-slate-400" 
-                    value={localSettings.qris_url || ''} 
-                    onChange={(e) => handleChange(e, 'qris_url')} 
-                    placeholder="Link gambar..."
-                    disabled={uploading}
-                  />
+                  <div className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-sm text-slate-400 truncate">
+                      {localSettings.qris_url ? (localSettings.qris_url.length > 50 ? 'Base64 Image (Tersimpan)' : localSettings.qris_url) : 'Belum ada gambar'}
+                  </div>
                   <label className={`bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded cursor-pointer flex items-center gap-2 transition-colors ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
                     {uploading ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
                     <span className="text-sm hidden sm:inline">Upload</span>
                     <input type="file" className="hidden" accept="image/*" disabled={uploading} onChange={handleQrisUpload} />
                   </label>
                </div>
+               <p className="text-[10px] text-slate-500">
+                  *Tips: Upload ulang QRIS di sini jika di halaman checkout gambar tidak muncul. Gambar akan otomatis dikompres agar ringan.
+               </p>
              </div>
           </div>
         </div>

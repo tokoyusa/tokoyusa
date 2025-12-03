@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { CartItem, UserProfile, StoreSettings, Voucher } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, LogIn, UserPlus, Lock, Mail, User } from 'lucide-react';
+import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, LogIn, UserPlus, Lock, Mail, User, ExternalLink } from 'lucide-react';
 import { getSupabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 
@@ -244,16 +244,32 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
            )}
 
            {selectedMethod === 'QRIS' && (
-             <div className="space-y-4 flex flex-col items-center">
+             <div className="space-y-4 flex flex-col items-center w-full">
                 <p className="text-sm text-slate-400">Scan QRIS untuk membayar:</p>
                 {settings.qris_url ? (
-                  <div className="bg-white p-2 rounded-lg inline-block w-full max-w-[250px] min-h-[200px] flex items-center justify-center">
-                    <img src={settings.qris_url} alt="QRIS" className="w-full h-auto object-contain" />
+                  <div className="flex flex-col items-center w-full">
+                      <div className="bg-white p-4 rounded-xl inline-block w-full max-w-[300px] shadow-lg flex items-center justify-center min-h-[250px]">
+                        <img 
+                            src={settings.qris_url} 
+                            alt="QRIS Code" 
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                                const parent = (e.target as HTMLElement).parentElement;
+                                if(parent) {
+                                    parent.innerHTML = '<div class="text-red-500 text-sm text-center font-medium">Gambar tidak dapat dimuat.<br/>Silakan upload ulang di Admin.</div>';
+                                }
+                            }}
+                        />
+                      </div>
+                      <a href={settings.qris_url} target="_blank" className="mt-4 text-xs text-primary hover:underline flex items-center gap-1">
+                          <ExternalLink size={12}/> Buka Gambar Full Size
+                      </a>
                   </div>
                 ) : (
-                  <div className="bg-slate-900 p-8 rounded text-center text-slate-500">
+                  <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 text-center text-slate-500 w-full max-w-[300px]">
                     <QrCode size={48} className="mx-auto mb-2 opacity-50"/>
-                    <p className="text-xs">QRIS belum diupload oleh Admin.</p>
+                    <p className="text-xs">QRIS belum diatur oleh Admin.</p>
                   </div>
                 )}
              </div>
