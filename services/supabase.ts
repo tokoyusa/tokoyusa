@@ -174,6 +174,8 @@ NOTIFY pgrst, 'reload config';
 export const VOUCHER_MIGRATION_SQL = `
 -- COPY KODE INI DAN JALANKAN DI SUPABASE SQL EDITOR (Jika tabel vouchers belum ada) --
 
+create extension if not exists "uuid-ossp";
+
 create table if not exists public.vouchers (
   id uuid default uuid_generate_v4() primary key,
   code text not null unique,

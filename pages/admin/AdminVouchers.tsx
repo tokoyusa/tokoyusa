@@ -26,7 +26,12 @@ const AdminVouchers: React.FC = () => {
     const { data, error } = await supabase.from('vouchers').select('*').order('created_at', { ascending: false });
     
     if (error) {
-       if (error.message.includes('relation "public.vouchers" does not exist')) {
+       // Detect both missing table AND schema cache errors
+       if (
+         error.message.includes('relation "public.vouchers" does not exist') || 
+         error.message.includes('Could not find the table') ||
+         error.message.includes('schema cache')
+       ) {
           setTableError(true);
        }
     } else if (data) {
@@ -60,7 +65,17 @@ const AdminVouchers: React.FC = () => {
       fetchVouchers();
       
     } catch (error: any) {
-      alert("Gagal menyimpan voucher: " + error.message);
+      if (
+         error.message.includes('relation "public.vouchers" does not exist') || 
+         error.message.includes('Could not find the table') ||
+         error.message.includes('schema cache')
+      ) {
+          setTableError(true);
+          setIsModalOpen(false);
+          alert("Gagal menyimpan: Tabel database belum siap. Silakan lihat instruksi di halaman.");
+      } else {
+          alert("Gagal menyimpan voucher: " + error.message);
+      }
     }
   };
 
@@ -99,12 +114,20 @@ const AdminVouchers: React.FC = () => {
            <p className="text-sm text-yellow-200 mb-2">
               Database belum memiliki tabel voucher. Silakan copy & jalankan kode di bawah ini di Supabase SQL Editor.
            </p>
-           <button 
-             onClick={() => setShowSql(!showSql)} 
-             className="text-xs bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-1 rounded"
-           >
-             {showSql ? 'Sembunyikan SQL' : 'Lihat SQL'}
-           </button>
+           <div className="flex gap-2">
+             <button 
+               onClick={() => setShowSql(!showSql)} 
+               className="text-xs bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-1 rounded"
+             >
+               {showSql ? 'Sembunyikan SQL' : 'Lihat SQL'}
+             </button>
+             <button 
+               onClick={() => window.location.reload()} 
+               className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1 rounded"
+             >
+               Sudah Dijalankan? Refresh App
+             </button>
+           </div>
            
            {showSql && (
              <div className="bg-slate-950 p-3 mt-2 rounded font-mono text-xs text-green-400 relative overflow-x-auto">
