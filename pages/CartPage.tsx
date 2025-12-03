@@ -2,8 +2,8 @@
 import React, { useState } from 'react';
 import { CartItem, UserProfile, StoreSettings, Voucher } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, User as UserIcon, AlertTriangle, Mail, Lock } from 'lucide-react';
-import { getSupabase, GUEST_ORDER_MIGRATION_SQL } from '../services/supabase';
+import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X } from 'lucide-react';
+import { getSupabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 
 interface CartPageProps {
@@ -22,13 +22,6 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const [lastOrderTotal, setLastOrderTotal] = useState(0); 
   
-  // Guest / New Member Info
-  const [guestName, setGuestName] = useState('');
-  const [guestPhone, setGuestPhone] = useState('');
-  const [guestEmail, setGuestEmail] = useState('');
-  const [guestPassword, setGuestPassword] = useState('');
-  const [migrationError, setMigrationError] = useState(false);
-
   // Voucher States
   const [voucherCode, setVoucherCode] = useState('');
   const [checkingVoucher, setCheckingVoucher] = useState(false);
@@ -93,109 +86,50 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
      setVoucherError('');
   };
 
-  const processAffiliateCommission = async (orderTotal: number, currentUserId: string) => {
-    if (!settings.affiliate_commission_rate || settings.affiliate_commission_rate <= 0) return;
+  const processAffiliateCommission = async (orderTotal: number) => {
+    if (!user?.referred_by || !settings.affiliate_commission_rate || settings.affiliate_commission_rate <= 0) return;
+
     const supabase = getSupabase();
     if (!supabase) return;
 
-    // Get current user profile to check referred_by
-    const { data: userProfile } = await supabase.from('profiles').select('referred_by').eq('id', currentUserId).single();
+    // 1. Find the referrer
+    const { data: referrer } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('affiliate_code', user.referred_by)
+      .single();
 
-    if (userProfile && userProfile.referred_by) {
-      // Find the referrer
-      const { data: referrer } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('affiliate_code', userProfile.referred_by)
-        .single();
-
-      if (referrer) {
-        const commissionAmount = Math.floor(orderTotal * (settings.affiliate_commission_rate / 100));
-        if (commissionAmount > 0) {
-          await supabase.rpc('increment_balance', { 
-             user_id: referrer.id, 
-             amount: commissionAmount 
-          });
+    if (referrer) {
+      const commissionAmount = Math.floor(orderTotal * (settings.affiliate_commission_rate / 100));
+      if (commissionAmount > 0) {
+        // 2. Call the Secure RPC function to update balance
+        const { error } = await supabase.rpc('increment_balance', { 
+           user_id: referrer.id, 
+           amount: commissionAmount 
+        });
+        
+        if (error) {
+           console.error("Failed to add commission", error);
         }
       }
     }
   };
 
   const handleCheckout = async () => {
-    const supabase = getSupabase();
-    if (!supabase) return;
-
+    if (!user) {
+      navigate('/login');
+      return;
+    }
     if (cart.length === 0) return;
 
-    // Validasi Input Tamu
-    if (!user) {
-       if (!guestName.trim() || !guestPhone.trim() || !guestEmail.trim() || !guestPassword.trim()) {
-          alert("Mohon lengkapi Data Diri (Nama, WA, Email, Password) untuk membuat akun Member otomatis.");
-          return;
-       }
-    }
-
     setProcessing(true);
-    setMigrationError(false);
-
-    let finalUserId = user?.id || null;
-    let finalGuestInfo = null;
-
-    // AUTO-REGISTER LOGIC
-    if (!user) {
-        try {
-            // 1. Attempt to Sign Up
-            const { data: authData, error: authError } = await (supabase.auth as any).signUp({
-                email: guestEmail,
-                password: guestPassword,
-                options: {
-                    data: {
-                        full_name: guestName,
-                        phone: guestPhone
-                    }
-                }
-            });
-
-            if (authError) {
-                // If user already exists, try to treat as guest or stop
-                if (authError.message.includes('already registered')) {
-                   alert("Email sudah terdaftar. Silakan Login terlebih dahulu.");
-                   setProcessing(false);
-                   return;
-                }
-                throw authError;
-            }
-
-            if (authData.user) {
-                finalUserId = authData.user.id;
-                
-                // 2. Ensure Profile Created (Explicitly)
-                const { error: profileError } = await supabase.from('profiles').upsert({
-                    id: finalUserId,
-                    email: guestEmail,
-                    full_name: guestName,
-                    phone: guestPhone,
-                    role: 'user'
-                });
-                
-                if (profileError) console.error("Profile creation warning:", profileError);
-            } else {
-                // Should not happen if signUp works, but fallback to Guest Info just in case
-                finalGuestInfo = { name: guestName, phone: guestPhone };
-            }
-
-        } catch (err: any) {
-            console.error("Auto-register failed:", err);
-            alert("Gagal membuat akun otomatis: " + err.message);
-            setProcessing(false);
-            return;
-        }
-    }
-
+    const supabase = getSupabase();
+    
     // Create Order
-    const payload: any = {
-        user_id: finalUserId,
-        guest_info: finalUserId ? null : finalGuestInfo, // If user created, no need for guest_info
+    const { data: order, error } = await supabase!
+      .from('orders')
+      .insert({
+        user_id: user.id,
         subtotal: subtotal,
         discount_amount: discountAmount,
         voucher_code: appliedVoucher ? appliedVoucher.code : null,
@@ -203,29 +137,18 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
         status: 'pending',
         payment_method: selectedMethod,
         items: cart
-    };
-
-    const { data: order, error } = await supabase
-      .from('orders')
-      .insert(payload)
+      })
       .select()
       .single();
 
-    if (error) {
-      if (error.message.includes('guest_info') || error.message.includes('column') || error.message.includes('null value in column "user_id"')) {
-         setMigrationError(true);
-         alert("Database Error: Silakan jalankan SQL Migrasi Guest Mode.");
-      } else {
-         alert('Gagal membuat pesanan: ' + error.message);
-      }
+    if (error || !order) {
+      alert('Gagal membuat pesanan: ' + error?.message);
       setProcessing(false);
       return;
     }
 
-    // Process Affiliate Commission (Only if we have a valid user ID now)
-    if (finalUserId) {
-       await processAffiliateCommission(finalTotal, finalUserId);
-    }
+    // Process Affiliate Commission based on FINAL total
+    await processAffiliateCommission(finalTotal);
 
     setLastOrderTotal(finalTotal);
     setOrderSuccess(order.id);
@@ -235,9 +158,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
   const handleConfirmWA = () => {
     if (!orderSuccess) return;
-    
-    const buyerName = user?.full_name || guestName;
-    const msg = `Halo Admin, saya sudah melakukan pesanan.\nID: ${orderSuccess.slice(0, 8)}\nNama: ${buyerName}\nTotal: ${formatRupiah(lastOrderTotal)}\nMetode: ${selectedMethod}`;
+    const msg = `Halo Admin, saya sudah melakukan pesanan dengan ID: ${orderSuccess.slice(0, 8)}. Mohon diproses.\nTotal: ${formatRupiah(lastOrderTotal)}\nMetode: ${selectedMethod}`;
     window.open(generateWhatsAppLink(settings.whatsapp_number, msg), '_blank');
   };
 
@@ -252,13 +173,6 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
         <h2 className="text-3xl font-bold text-white mb-2">Pesanan Berhasil!</h2>
         <p className="text-slate-400 mb-6">ID Pesanan: #{orderSuccess.slice(0, 8)}</p>
         
-        {!user && guestEmail && (
-           <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg mb-6 max-w-md">
-              <h3 className="text-blue-200 font-bold mb-1">Akun Member Telah Dibuat!</h3>
-              <p className="text-sm text-blue-300">Silakan login menggunakan Email: <strong>{guestEmail}</strong> dan Password yang Anda masukkan tadi untuk melihat riwayat pesanan.</p>
-           </div>
-        )}
-
         <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 max-w-md w-full mb-6 text-left">
            <h3 className="font-bold text-lg mb-4 border-b border-slate-700 pb-2">Instruksi Pembayaran</h3>
            <div className="mb-4 text-center">
@@ -324,8 +238,8 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
            </div>
         </div>
         
-        <button onClick={() => window.location.reload()} className="text-primary hover:underline">
-           Kembali ke Toko
+        <button onClick={() => navigate('/profile')} className="text-primary hover:underline">
+           Lihat Riwayat Pesanan
         </button>
       </div>
     );
@@ -335,29 +249,6 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     <div className="py-8">
       <h1 className="text-2xl font-bold mb-6">Keranjang Belanja</h1>
       
-      {migrationError && (
-         <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg mb-6 animate-pulse max-w-4xl mx-auto">
-            <div className="flex items-center gap-2 text-yellow-500 font-bold mb-2">
-               <AlertTriangle size={20} /> Perbaikan Database
-            </div>
-            <p className="text-sm text-yellow-200 mb-2">
-               Silakan jalankan SQL ini agar fitur order berjalan lancar.
-            </p>
-            <div className="bg-slate-950 p-3 rounded font-mono text-xs text-green-400 relative overflow-x-auto">
-               <pre>{GUEST_ORDER_MIGRATION_SQL}</pre>
-               <button 
-                  onClick={() => {
-                     navigator.clipboard.writeText(GUEST_ORDER_MIGRATION_SQL);
-                     alert("SQL disalin! Buka Supabase > SQL Editor > Paste > Run.");
-                  }}
-                  className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded text-[10px]"
-               >
-                  Copy SQL
-               </button>
-            </div>
-         </div>
-      )}
-
       {cart.length === 0 ? (
         <div className="text-center py-12 bg-slate-800 rounded-xl border border-slate-700">
           <p className="text-slate-400 mb-4">Keranjang Anda kosong</p>
@@ -366,89 +257,19 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
       ) : (
         <div className="grid md:grid-cols-3 gap-8">
           {/* Items List */}
-          <div className="md:col-span-2 space-y-6">
-            <div className="space-y-4">
-               {cart.map(item => (
-                 <div key={item.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex gap-4 items-center">
-                    <img src={item.image_url || 'https://picsum.photos/100'} alt={item.name} className="w-16 h-16 rounded object-cover" />
-                    <div className="flex-1">
-                      <h3 className="font-bold text-slate-200">{item.name}</h3>
-                      <p className="text-primary font-medium">{formatRupiah(item.discount_price || item.price)}</p>
-                    </div>
-                    <button onClick={() => removeFromCart(item.id)} className="text-red-500 p-2 hover:bg-slate-700 rounded-full">
-                      <Trash2 size={20} />
-                    </button>
+          <div className="md:col-span-2 space-y-4">
+            {cart.map(item => (
+              <div key={item.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex gap-4 items-center">
+                 <img src={item.image_url || 'https://picsum.photos/100'} alt={item.name} className="w-16 h-16 rounded object-cover" />
+                 <div className="flex-1">
+                   <h3 className="font-bold text-slate-200">{item.name}</h3>
+                   <p className="text-primary font-medium">{formatRupiah(item.discount_price || item.price)}</p>
                  </div>
-               ))}
-            </div>
-
-            {/* FORM DATA PEMBELI (Otomatis Member) */}
-            {!user && (
-               <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
-                  <div className="mb-4 border-b border-slate-700 pb-2">
-                     <h3 className="text-lg font-bold flex items-center gap-2">
-                        <UserIcon className="text-primary" size={20} /> Data Pembeli
-                     </h3>
-                     <p className="text-xs text-green-400 mt-1">Akun Member akan dibuat otomatis setelah checkout.</p>
-                  </div>
-                  
-                  <div className="space-y-4">
-                     <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                           <label className="block text-sm text-slate-400 mb-1">Nama Lengkap</label>
-                           <input 
-                              type="text" 
-                              className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:border-primary outline-none"
-                              placeholder="Budi Santoso"
-                              value={guestName}
-                              onChange={e => setGuestName(e.target.value)}
-                           />
-                        </div>
-                        <div>
-                           <label className="block text-sm text-slate-400 mb-1">No. WhatsApp</label>
-                           <div className="relative">
-                              <Smartphone size={16} className="absolute left-3 top-3 text-slate-500" />
-                              <input 
-                                 type="text" 
-                                 className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-9 focus:border-primary outline-none"
-                                 placeholder="0812..."
-                                 value={guestPhone}
-                                 onChange={e => setGuestPhone(e.target.value)}
-                              />
-                           </div>
-                        </div>
-                     </div>
-                     <div className="grid md:grid-cols-2 gap-4">
-                        <div>
-                           <label className="block text-sm text-slate-400 mb-1">Email (Untuk Login)</label>
-                           <div className="relative">
-                              <Mail size={16} className="absolute left-3 top-3 text-slate-500" />
-                              <input 
-                                 type="email" 
-                                 className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-9 focus:border-primary outline-none"
-                                 placeholder="email@contoh.com"
-                                 value={guestEmail}
-                                 onChange={e => setGuestEmail(e.target.value)}
-                              />
-                           </div>
-                        </div>
-                        <div>
-                           <label className="block text-sm text-slate-400 mb-1">Buat Password</label>
-                           <div className="relative">
-                              <Lock size={16} className="absolute left-3 top-3 text-slate-500" />
-                              <input 
-                                 type="password" 
-                                 className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-9 focus:border-primary outline-none"
-                                 placeholder="Minimal 6 karakter"
-                                 value={guestPassword}
-                                 onChange={e => setGuestPassword(e.target.value)}
-                              />
-                           </div>
-                        </div>
-                     </div>
-                  </div>
-               </div>
-            )}
+                 <button onClick={() => removeFromCart(item.id)} className="text-red-500 p-2 hover:bg-slate-700 rounded-full">
+                   <Trash2 size={20} />
+                 </button>
+              </div>
+            ))}
           </div>
 
           {/* Checkout Summary */}
@@ -546,7 +367,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                   disabled={processing}
                   className="w-full bg-primary hover:bg-blue-600 disabled:bg-slate-600 text-white font-bold py-3 rounded-lg transition-colors"
                 >
-                  {processing ? 'Memproses...' : 'Checkout & Bayar'}
+                  {processing ? 'Memproses...' : 'Bayar Sekarang'}
                 </button>
              </div>
           </div>

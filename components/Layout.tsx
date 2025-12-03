@@ -57,52 +57,47 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
               </Link>
             </div>
 
-            {/* Desktop Menu */}
-            <div className="hidden md:flex items-center space-x-4">
-              {/* Only show navigation links if user is logged in */}
-              {user && navLinks.map((link) => (
-                 link.name !== 'Kategori' && ( 
-                  <Link
-                    key={link.path}
-                    to={link.path}
-                    className={`px-3 py-2 rounded-md text-sm font-medium hover:text-primary transition-colors ${location.pathname === link.path ? 'text-primary' : 'text-slate-400'}`}
-                  >
-                    <div className="flex items-center gap-2">
-                       {link.name}
-                       {link.badge ? <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">{link.badge}</span> : null}
-                    </div>
-                  </Link>
-                 )
-              ))}
-
-              {isAdmin && (
-                <div className="flex items-center border-l border-slate-700 pl-4 space-x-2">
-                  <span className="text-xs text-slate-500 font-bold px-2">ADMIN</span>
-                  {adminLinks.map((link) => (
+            {/* Desktop Menu - ONLY SHOW IF USER IS LOGGED IN */}
+            {user && (
+              <div className="hidden md:flex items-center space-x-4">
+                {navLinks.map((link) => (
+                   link.name !== 'Kategori' && ( 
                     <Link
                       key={link.path}
                       to={link.path}
-                      className={`px-3 py-2 rounded-md text-sm font-medium hover:text-accent transition-colors ${location.pathname === link.path ? 'bg-slate-800 text-accent' : 'text-slate-400 hover:bg-slate-800'}`}
+                      className={`px-3 py-2 rounded-md text-sm font-medium hover:text-primary transition-colors ${location.pathname === link.path ? 'text-primary' : 'text-slate-400'}`}
                     >
-                      {link.name}
+                      <div className="flex items-center gap-2">
+                         {link.name}
+                         {link.badge ? <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">{link.badge}</span> : null}
+                      </div>
                     </Link>
-                  ))}
-                </div>
-              )}
+                   )
+                ))}
 
-              {user ? (
+                {isAdmin && (
+                  <div className="flex items-center border-l border-slate-700 pl-4 space-x-2">
+                    <span className="text-xs text-slate-500 font-bold px-2">ADMIN</span>
+                    {adminLinks.map((link) => (
+                      <Link
+                        key={link.path}
+                        to={link.path}
+                        className={`px-3 py-2 rounded-md text-sm font-medium hover:text-accent transition-colors ${location.pathname === link.path ? 'bg-slate-800 text-accent' : 'text-slate-400 hover:bg-slate-800'}`}
+                      >
+                        {link.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+
                 <button
                   onClick={handleLogout}
                   className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-3 py-2 rounded-md text-sm transition-colors ml-4"
                 >
                   Logout
                 </button>
-              ) : (
-                <Link to="/login" className="bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium">
-                  Login / Daftar
-                </Link>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Mobile Admin Toggle (if admin) */}
             {isAdmin && (

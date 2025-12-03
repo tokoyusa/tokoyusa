@@ -44,8 +44,6 @@ const App: React.FC = () => {
     try {
       const supabase = getSupabase();
       if (!supabase) {
-        // If config exists but client fails, likely invalid config
-        // Verify if config exists in storage or env
         if (!getStoredConfig()) {
            setDbConfigured(false);
         }
@@ -83,20 +81,17 @@ const App: React.FC = () => {
         .single();
         
       if (settingsData) {
-        // Merge with default to ensure new fields like e_wallets exist
         setSettings({ ...DEFAULT_SETTINGS, ...settingsData.value });
       }
 
     } catch (error) {
       console.error("Session check error:", error);
     } finally {
-      // CRITICAL: Always stop loading, regardless of success or failure
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    // Check if Supabase is configured
     const config = getStoredConfig();
     if (!config) {
       setDbConfigured(false);
@@ -104,7 +99,6 @@ const App: React.FC = () => {
       return;
     }
     
-    // Attempt init
     const client = initSupabase();
     if (!client) {
       setDbConfigured(false);
@@ -115,10 +109,8 @@ const App: React.FC = () => {
     setDbConfigured(true);
     checkSession();
 
-    // Listen for auth changes
     const { data: authListener } = (client.auth as any).onAuthStateChange(async (_event: any, session: any) => {
       if (session) {
-          // Slight delay to ensure profile is created if this is a signup event
           setTimeout(async () => {
              const { data: profile } = await client
               .from('profiles')
@@ -141,7 +133,7 @@ const App: React.FC = () => {
   const addToCart = (product: Product) => {
     setCart((prev) => {
       const existing = prev.find((p) => p.id === product.id);
-      if (existing) return prev; // Digital products usually single qty
+      if (existing) return prev; 
       return [...prev, { ...product, quantity: 1 }];
     });
   };
@@ -154,7 +146,6 @@ const App: React.FC = () => {
 
   const updateSettings = (newSettings: StoreSettings) => {
     setSettings(newSettings);
-    // Persist to DB if possible
     const supabase = getSupabase();
     if (supabase && user?.role === UserRole.ADMIN) {
       supabase.from('settings').upsert({
@@ -167,19 +158,15 @@ const App: React.FC = () => {
   };
 
   const handleConfigured = () => {
-    // Re-initialize Supabase client immediately
     initSupabase();
-    setLoading(true); // Show loading while we verify connection/session
+    setLoading(true);
     setDbConfigured(true);
-    // Effect will trigger checkSession
   };
 
-  // If DB is not configured, show Setup Page
   if (!dbConfigured) {
     return <SetupPage onConfigured={handleConfigured} />;
   }
 
-  // Show loading spinner checking session
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 flex items-center justify-center text-primary">
@@ -192,7 +179,7 @@ const App: React.FC = () => {
     <Router>
       <Layout user={user} setUser={setUser} cartCount={cart.length}>
         <Routes>
-          {/* Main Route Logic: If logged in, show Home. If not, Redirect to Login */}
+          {/* PROTECTED ROUTES: Redirect to /login if not authenticated */}
           <Route 
             path="/" 
             element={user ? <HomePage addToCart={addToCart} settings={settings} /> : <Navigate to="/login" replace />} 
@@ -208,18 +195,18 @@ const App: React.FC = () => {
             element={user ? <CartPage cart={cart} removeFromCart={removeFromCart} clearCart={clearCart} user={user} settings={settings} /> : <Navigate to="/login" replace />} 
           />
           
-          {/* Auth Route: If logged in, Redirect to Home. If not, show AuthPage */}
-          <Route 
-            path="/login" 
-            element={!user ? <AuthPage onLoginSuccess={checkSession} /> : <Navigate to="/" replace />} 
-          />
-          
           <Route 
             path="/profile" 
             element={user ? <ProfilePage user={user} /> : <Navigate to="/login" replace />} 
           />
           
-          {/* Admin Routes */}
+          {/* AUTH ROUTE: Redirect to / if already authenticated */}
+          <Route 
+            path="/login" 
+            element={!user ? <AuthPage onLoginSuccess={checkSession} /> : <Navigate to="/" replace />} 
+          />
+          
+          {/* ADMIN ROUTES */}
           <Route path="/admin/dashboard" element={user?.role === UserRole.ADMIN ? <AdminDashboard /> : <Navigate to="/" />} />
           <Route path="/admin/orders" element={user?.role === UserRole.ADMIN ? <AdminOrders /> : <Navigate to="/" />} />
           <Route path="/admin/products" element={user?.role === UserRole.ADMIN ? <AdminProducts /> : <Navigate to="/" />} />
@@ -227,7 +214,6 @@ const App: React.FC = () => {
           <Route path="/admin/affiliates" element={user?.role === UserRole.ADMIN ? <AdminAffiliates /> : <Navigate to="/" />} />
           <Route path="/admin/vouchers" element={user?.role === UserRole.ADMIN ? <AdminVouchers /> : <Navigate to="/" />} />
           
-          {/* Fallback */}
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </Layout>
