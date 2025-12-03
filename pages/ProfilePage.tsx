@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { getSupabase, BANK_MIGRATION_SQL } from '../services/supabase';
 import { UserProfile, Order } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check, AlertTriangle, RefreshCw } from 'lucide-react';
+import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check, AlertTriangle, RefreshCw, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface ProfilePageProps {
@@ -144,6 +144,16 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
            <p className="text-slate-400">{user.email}</p>
            {user.role === 'admin' && (
               <span className="inline-block bg-primary/20 text-primary text-xs px-2 py-1 rounded mt-2 font-bold">ADMINISTRATOR</span>
+           )}
+           
+           {/* Tombol Daftar Affiliate jika belum */}
+           {!user.affiliate_code && (
+              <button 
+                 onClick={() => setActiveTab('affiliate')}
+                 className="mt-3 text-xs bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-full flex items-center gap-1 font-bold animate-pulse"
+              >
+                 <Star size={12} fill="white" /> Daftar Affiliate
+              </button>
            )}
         </div>
         <div className="flex flex-col gap-2 w-full md:w-auto">
@@ -379,9 +389,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                           await supabase.from('profiles').update({ affiliate_code: code }).eq('id', user.id);
                           window.location.reload();
                        }}
-                       className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-lg"
+                       className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-bold flex items-center justify-center gap-2 mx-auto"
                     >
-                       Generate Kode Affiliate
+                       <Star size={18} /> Daftar Sekarang (Gratis)
                     </button>
                  </div>
               ) : (
