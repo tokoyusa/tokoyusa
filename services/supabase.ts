@@ -106,12 +106,13 @@ create table if not exists public.vouchers (
 -- ORDERS
 create table if not exists public.orders (
   id uuid default uuid_generate_v4() primary key,
-  user_id uuid references public.profiles(id),
+  user_id uuid references public.profiles(id), -- Nullable (allows guests)
+  guest_info jsonb, -- Stores guest name & phone
   total_amount numeric not null,
   subtotal numeric,
   discount_amount numeric,
   voucher_code text,
-  status text default 'pending', -- pending, paid, completed, failed
+  status text default 'pending', -- pending, paid, completed, failed, processing, cancelled
   payment_method text,
   payment_proof text,
   items jsonb, -- Storing items as JSONB for simplicity in this demo
@@ -144,6 +145,8 @@ create policy "Users can view own orders." on public.orders for select using (au
 create policy "Admins can view all orders." on public.orders for select using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 create policy "Users can insert orders." on public.orders for insert with check (auth.uid() = user_id);
 create policy "Admins can update orders" on public.orders for update using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+-- Allow guests to insert orders (if user_id is null)
+create policy "Public can insert orders" on public.orders for insert with check (true);
 
 alter table public.settings enable row level security;
 create policy "Settings viewable by everyone" on public.settings for select using (true);
@@ -193,5 +196,18 @@ ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS subtotal numeric;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS discount_amount numeric;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS voucher_code text;
 
+NOTIFY pgrst, 'reload config';
+`;
+
+export const GUEST_ORDER_MIGRATION_SQL = `
+-- IZINKAN GUEST CHECKOUT (User ID Boleh Kosong) --
+ALTER TABLE public.orders ALTER COLUMN user_id DROP NOT NULL;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS guest_info jsonb;
+
+-- IZINKAN INSERT PUBLIK (UNTUK GUEST) --
+DROP POLICY IF EXISTS "Users can insert orders." ON public.orders;
+CREATE POLICY "Public can insert orders" ON public.orders FOR INSERT WITH CHECK (true);
+
+-- REFRESH CACHE --
 NOTIFY pgrst, 'reload config';
 `;

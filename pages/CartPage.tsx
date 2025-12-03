@@ -2,8 +2,8 @@
 import React, { useState } from 'react';
 import { CartItem, UserProfile, StoreSettings, Voucher } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X } from 'lucide-react';
-import { getSupabase } from '../services/supabase';
+import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, User as UserIcon, AlertTriangle } from 'lucide-react';
+import { getSupabase, GUEST_ORDER_MIGRATION_SQL } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 
 interface CartPageProps {
@@ -22,6 +22,11 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const [lastOrderTotal, setLastOrderTotal] = useState(0); 
   
+  // Guest Info
+  const [guestName, setGuestName] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
+  const [migrationError, setMigrationError] = useState(false);
+
   // Voucher States
   const [voucherCode, setVoucherCode] = useState('');
   const [checkingVoucher, setCheckingVoucher] = useState(false);
@@ -87,7 +92,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   };
 
   const processAffiliateCommission = async (orderTotal: number) => {
-    if (!user?.referred_by || !settings.affiliate_commission_rate || settings.affiliate_commission_rate <= 0) return;
+    if (!user || !user.referred_by || !settings.affiliate_commission_rate || settings.affiliate_commission_rate <= 0) return;
 
     const supabase = getSupabase();
     if (!supabase) return;
@@ -116,20 +121,24 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   };
 
   const handleCheckout = async () => {
+    // Guest Validation
     if (!user) {
-      navigate('/login');
-      return;
+       if (!guestName.trim() || !guestPhone.trim()) {
+          alert("Mohon lengkapi Data Pembeli (Nama & WhatsApp) sebelum membayar.");
+          return;
+       }
     }
+
     if (cart.length === 0) return;
 
     setProcessing(true);
+    setMigrationError(false);
     const supabase = getSupabase();
     
     // Create Order
-    const { data: order, error } = await supabase!
-      .from('orders')
-      .insert({
-        user_id: user.id,
+    const payload: any = {
+        user_id: user ? user.id : null, // Null if guest
+        guest_info: user ? null : { name: guestName, phone: guestPhone },
         subtotal: subtotal,
         discount_amount: discountAmount,
         voucher_code: appliedVoucher ? appliedVoucher.code : null,
@@ -137,18 +146,29 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
         status: 'pending',
         payment_method: selectedMethod,
         items: cart
-      })
+    };
+
+    const { data: order, error } = await supabase!
+      .from('orders')
+      .insert(payload)
       .select()
       .single();
 
-    if (error || !order) {
-      alert('Gagal membuat pesanan: ' + error?.message);
+    if (error) {
+      if (error.message.includes('guest_info') || error.message.includes('column') || error.message.includes('null value in column "user_id"')) {
+         setMigrationError(true);
+         alert("Gagal Checkout: Database belum mendukung mode Tamu. Silakan copy SQL yang muncul.");
+      } else {
+         alert('Gagal membuat pesanan: ' + error.message);
+      }
       setProcessing(false);
       return;
     }
 
-    // Process Affiliate Commission based on FINAL total
-    await processAffiliateCommission(finalTotal);
+    // Process Affiliate Commission based on FINAL total (Only for registered users)
+    if (user) {
+       await processAffiliateCommission(finalTotal);
+    }
 
     setLastOrderTotal(finalTotal);
     setOrderSuccess(order.id);
@@ -158,7 +178,9 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
   const handleConfirmWA = () => {
     if (!orderSuccess) return;
-    const msg = `Halo Admin, saya sudah melakukan pesanan dengan ID: ${orderSuccess.slice(0, 8)}. Mohon diproses.\nTotal: ${formatRupiah(lastOrderTotal)}\nMetode: ${selectedMethod}`;
+    
+    const buyerName = user?.full_name || guestName;
+    const msg = `Halo Admin, saya sudah melakukan pesanan.\nID: ${orderSuccess.slice(0, 8)}\nNama: ${buyerName}\nTotal: ${formatRupiah(lastOrderTotal)}\nMetode: ${selectedMethod}`;
     window.open(generateWhatsAppLink(settings.whatsapp_number, msg), '_blank');
   };
 
@@ -238,9 +260,15 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
            </div>
         </div>
         
-        <button onClick={() => navigate('/profile')} className="text-primary hover:underline">
-           Lihat Riwayat Pesanan
-        </button>
+        {user ? (
+           <button onClick={() => navigate('/profile')} className="text-primary hover:underline">
+              Lihat Riwayat Pesanan
+           </button>
+        ) : (
+           <button onClick={() => navigate('/')} className="text-primary hover:underline">
+              Kembali ke Toko
+           </button>
+        )}
       </div>
     );
   }
@@ -249,6 +277,29 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     <div className="py-8">
       <h1 className="text-2xl font-bold mb-6">Keranjang Belanja</h1>
       
+      {migrationError && (
+         <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg mb-6 animate-pulse max-w-4xl mx-auto">
+            <div className="flex items-center gap-2 text-yellow-500 font-bold mb-2">
+               <AlertTriangle size={20} /> Perbaikan Database Guest Mode
+            </div>
+            <p className="text-sm text-yellow-200 mb-2">
+               Database belum mendukung checkout tanpa login. Silakan copy & jalankan kode SQL ini.
+            </p>
+            <div className="bg-slate-950 p-3 rounded font-mono text-xs text-green-400 relative overflow-x-auto">
+               <pre>{GUEST_ORDER_MIGRATION_SQL}</pre>
+               <button 
+                  onClick={() => {
+                     navigator.clipboard.writeText(GUEST_ORDER_MIGRATION_SQL);
+                     alert("SQL disalin! Buka Supabase > SQL Editor > Paste > Run.");
+                  }}
+                  className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded text-[10px]"
+               >
+                  Copy SQL
+               </button>
+            </div>
+         </div>
+      )}
+
       {cart.length === 0 ? (
         <div className="text-center py-12 bg-slate-800 rounded-xl border border-slate-700">
           <p className="text-slate-400 mb-4">Keranjang Anda kosong</p>
@@ -257,19 +308,55 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
       ) : (
         <div className="grid md:grid-cols-3 gap-8">
           {/* Items List */}
-          <div className="md:col-span-2 space-y-4">
-            {cart.map(item => (
-              <div key={item.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex gap-4 items-center">
-                 <img src={item.image_url || 'https://picsum.photos/100'} alt={item.name} className="w-16 h-16 rounded object-cover" />
-                 <div className="flex-1">
-                   <h3 className="font-bold text-slate-200">{item.name}</h3>
-                   <p className="text-primary font-medium">{formatRupiah(item.discount_price || item.price)}</p>
+          <div className="md:col-span-2 space-y-6">
+            <div className="space-y-4">
+               {cart.map(item => (
+                 <div key={item.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex gap-4 items-center">
+                    <img src={item.image_url || 'https://picsum.photos/100'} alt={item.name} className="w-16 h-16 rounded object-cover" />
+                    <div className="flex-1">
+                      <h3 className="font-bold text-slate-200">{item.name}</h3>
+                      <p className="text-primary font-medium">{formatRupiah(item.discount_price || item.price)}</p>
+                    </div>
+                    <button onClick={() => removeFromCart(item.id)} className="text-red-500 p-2 hover:bg-slate-700 rounded-full">
+                      <Trash2 size={20} />
+                    </button>
                  </div>
-                 <button onClick={() => removeFromCart(item.id)} className="text-red-500 p-2 hover:bg-slate-700 rounded-full">
-                   <Trash2 size={20} />
-                 </button>
-              </div>
-            ))}
+               ))}
+            </div>
+
+            {/* GUEST INFO FORM (Only if not logged in) */}
+            {!user && (
+               <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                  <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+                     <UserIcon className="text-primary" size={20} /> Data Pembeli
+                  </h3>
+                  <div className="grid md:grid-cols-2 gap-4">
+                     <div>
+                        <label className="block text-sm text-slate-400 mb-1">Nama Lengkap</label>
+                        <input 
+                           type="text" 
+                           className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:border-primary outline-none"
+                           placeholder="Contoh: Budi Santoso"
+                           value={guestName}
+                           onChange={e => setGuestName(e.target.value)}
+                        />
+                     </div>
+                     <div>
+                        <label className="block text-sm text-slate-400 mb-1">No. WhatsApp</label>
+                        <input 
+                           type="text" 
+                           className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:border-primary outline-none"
+                           placeholder="0812..."
+                           value={guestPhone}
+                           onChange={e => setGuestPhone(e.target.value)}
+                        />
+                     </div>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                     * Data ini digunakan untuk konfirmasi pesanan. Ingin simpan riwayat belanja? <button onClick={() => navigate('/login')} className="text-primary underline">Login / Daftar</button>
+                  </p>
+               </div>
+            )}
           </div>
 
           {/* Checkout Summary */}

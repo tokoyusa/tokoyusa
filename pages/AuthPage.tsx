@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { getSupabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingBag, Lock, User as UserIcon, Ticket } from 'lucide-react';
+import { ShoppingBag, Lock, User as UserIcon, Ticket, ArrowLeft, Info } from 'lucide-react';
 
 interface AuthPageProps {
   onLoginSuccess: () => void;
@@ -124,18 +124,32 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-accent/10 rounded-full blur-3xl"></div>
 
-        <div className="flex justify-center mb-6 relative z-10">
+        {/* BACK TO STORE BUTTON */}
+        <button 
+           onClick={() => navigate('/')}
+           className="absolute top-4 left-4 text-slate-400 hover:text-white flex items-center gap-1 text-sm z-20"
+        >
+           <ArrowLeft size={16} /> Kembali
+        </button>
+
+        <div className="flex justify-center mb-6 relative z-10 mt-6">
            <div className="bg-slate-900 p-4 rounded-full border border-slate-700 shadow-lg">
              <ShoppingBag className="text-primary w-10 h-10" />
            </div>
         </div>
         
         <h2 className="text-2xl font-bold text-center mb-2 text-white">
-          {isLogin ? 'Selamat Datang Kembali' : 'Bergabung Sekarang'}
+          {isLogin ? 'Login Member / Affiliate' : 'Daftar Affiliate'}
         </h2>
-        <p className="text-center text-slate-400 mb-8 text-sm">
-          {isLogin ? 'Masuk untuk mengelola pesanan Anda' : 'Buat akun untuk mulai berbelanja'}
-        </p>
+        
+        {/* INFO BOX: SHOPPING WITHOUT LOGIN */}
+        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-6 text-sm text-blue-200 flex gap-2 items-start relative z-10">
+           <Info className="flex-shrink-0 mt-0.5" size={16} />
+           <div>
+              <p><strong>Ingin berbelanja?</strong> Anda tidak perlu Mendaftar/Login. Silakan langsung pilih produk dan checkout.</p>
+              <button onClick={() => navigate('/')} className="text-primary underline font-bold mt-1">Kembali ke Toko</button>
+           </div>
+        </div>
         
         {error && (
           <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-lg text-sm mb-6 text-center">
@@ -206,18 +220,18 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
                 Memproses...
               </span>
-            ) : (isLogin ? 'Masuk' : 'Daftar')}
+            ) : (isLogin ? 'Masuk' : 'Daftar Akun')}
           </button>
         </form>
 
         <div className="mt-8 pt-6 border-t border-slate-700/50 text-center relative z-10">
           <p className="text-sm text-slate-400">
-            {isLogin ? 'Belum punya akun? ' : 'Sudah punya akun? '}
+            {isLogin ? 'Mau jadi affiliate? ' : 'Sudah punya akun? '}
             <button 
               onClick={() => setIsLogin(!isLogin)} 
               className="text-primary hover:text-blue-400 font-bold ml-1 transition-colors"
             >
-              {isLogin ? 'Daftar Sekarang' : 'Login'}
+              {isLogin ? 'Daftar Disini' : 'Login'}
             </button>
           </p>
         </div>
