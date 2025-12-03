@@ -161,7 +161,7 @@ const HomePage: React.FC<HomePageProps> = ({ addToCart, settings }) => {
                     
                     <button 
                       onClick={() => addToCart(product)}
-                      className="w-full bg-slate-700 hover:bg-primary text-white py-1.5 md:py-2 rounded-lg flex items-center justify-center gap-1 md:gap-2 transition-colors font-medium text-xs md:text-sm"
+                      className="w-full bg-red-500 hover:bg-red-600 text-white py-1.5 md:py-2 rounded-lg flex items-center justify-center gap-1 md:gap-2 transition-colors font-medium text-xs md:text-sm"
                     >
                       <ShoppingCart size={14} className="md:w-5 md:h-5" />
                       Tambah
