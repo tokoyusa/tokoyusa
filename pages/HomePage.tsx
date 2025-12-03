@@ -145,8 +145,7 @@ const HomePage: React.FC<HomePageProps> = ({ addToCart, settings }) => {
                     <h3 className="text-sm md:text-lg font-bold text-slate-100 mb-1 md:mb-2 line-clamp-2 hover:text-primary transition-colors leading-tight">{product.name}</h3>
                   </Link>
                   
-                  {/* Hide Description on Mobile to save space */}
-                  <p className="text-slate-400 text-xs md:text-sm mb-3 line-clamp-2 flex-1 hidden md:block">{product.description}</p>
+                  {/* Description hidden/removed as requested */}
                   
                   <div className="mt-auto">
                     <div className="flex flex-col md:flex-row md:items-center gap-0.5 md:gap-2 mb-2 md:mb-3">
