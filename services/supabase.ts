@@ -64,7 +64,7 @@ export const SQL_SCHEMA = `
 create extension if not exists "uuid-ossp";
 
 -- PROFILES
-create table public.profiles (
+create table if not exists public.profiles (
   id uuid references auth.users not null primary key,
   email text,
   role text default 'user',
@@ -80,7 +80,7 @@ create table public.profiles (
 );
 
 -- PRODUCTS
-create table public.products (
+create table if not exists public.products (
   id uuid default uuid_generate_v4() primary key,
   name text not null,
   description text,
@@ -94,7 +94,7 @@ create table public.products (
 );
 
 -- ORDERS
-create table public.orders (
+create table if not exists public.orders (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references public.profiles(id),
   total_amount numeric not null,
@@ -106,7 +106,7 @@ create table public.orders (
 );
 
 -- SETTINGS (Simple Key-Value store for store config)
-create table public.settings (
+create table if not exists public.settings (
   key text primary key,
   value jsonb
 );
@@ -133,14 +133,7 @@ create policy "Settings viewable by everyone" on public.settings for select usin
 create policy "Admins can update settings" on public.settings for update using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 create policy "Admins can insert settings" on public.settings for insert with check (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
--- STORAGE BUCKETS
--- insert into storage.buckets (id, name) values ('images', 'images');
--- insert into storage.buckets (id, name) values ('files', 'files');
--- create policy "Public Access" on storage.objects for select using ( bucket_id = 'images' ); 
--- create policy "Auth Upload" on storage.objects for insert with check ( auth.role() = 'authenticated' );
-
 -- FUNCTION FOR SAFER BALANCE UPDATES (AFFILIATE)
--- This allows updating balance without exposing direct update permissions to all users
 create or replace function increment_balance(user_id uuid, amount numeric)
 returns void as $$
 begin
@@ -149,4 +142,11 @@ begin
   where id = user_id;
 end;
 $$ language plpgsql security definer;
+`;
+
+export const BANK_MIGRATION_SQL = `
+-- COPY KODE INI DAN JALANKAN DI SUPABASE SQL EDITOR --
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_name text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_number text;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_holder text;
 `;

@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
 import { StoreSettings } from '../../types';
-import { Save, RefreshCw, Upload, Loader2, Image as ImageIcon, Wallet } from 'lucide-react';
+import { Save, RefreshCw, Upload, Loader2, Image as ImageIcon, Wallet, Database, Terminal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getSupabase } from '../../services/supabase';
+import { getSupabase, BANK_MIGRATION_SQL } from '../../services/supabase';
 
 interface AdminSettingsProps {
   settings: StoreSettings;
@@ -16,6 +16,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
       e_wallets: settings.e_wallets || [] // Ensure it exists
   });
   const [uploading, setUploading] = useState(false);
+  const [showSql, setShowSql] = useState(false);
   const navigate = useNavigate();
   const supabase = getSupabase();
 
@@ -287,13 +288,37 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
           </div>
         </div>
         
-        {/* Database */}
+        {/* Database & Tools */}
          <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4 h-fit">
-          <h2 className="text-lg font-bold border-b border-slate-700 pb-2">Database Connection</h2>
-          <p className="text-sm text-slate-400">Database saat ini terhubung.</p>
-          <button onClick={resetDatabase} className="text-red-400 hover:text-red-300 text-sm flex items-center gap-1">
-             <RefreshCw size={14} /> Reset Koneksi Database
+          <h2 className="text-lg font-bold border-b border-slate-700 pb-2 flex items-center gap-2"><Database size={18}/> Tools & Database</h2>
+          
+          <button 
+             onClick={() => setShowSql(!showSql)}
+             className="w-full bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded flex items-center justify-center gap-2 text-sm"
+          >
+             <Terminal size={14} /> {showSql ? 'Sembunyikan SQL' : 'Lihat SQL Migrasi'}
           </button>
+          
+          {showSql && (
+             <div className="bg-slate-950 p-3 rounded text-xs font-mono text-green-400 overflow-x-auto relative">
+                <pre>{BANK_MIGRATION_SQL}</pre>
+                <button 
+                  onClick={() => {
+                     navigator.clipboard.writeText(BANK_MIGRATION_SQL);
+                     alert("Copied!");
+                  }}
+                  className="absolute top-2 right-2 bg-slate-800 text-white px-2 py-1 rounded text-[10px]"
+                >
+                   Copy
+                </button>
+             </div>
+          )}
+
+          <div className="border-t border-slate-700 pt-4 mt-4">
+             <button onClick={resetDatabase} className="text-red-400 hover:text-red-300 text-sm flex items-center gap-1">
+                <RefreshCw size={14} /> Reset Koneksi Database
+             </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
-import { getSupabase } from '../services/supabase';
+import { getSupabase, BANK_MIGRATION_SQL } from '../services/supabase';
 import { UserProfile, Order } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check } from 'lucide-react';
+import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check, AlertTriangle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface ProfilePageProps {
@@ -26,6 +26,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
   
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [migrationError, setMigrationError] = useState(false);
+
   const navigate = useNavigate();
   const supabase = getSupabase();
 
@@ -71,6 +73,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
     e.preventDefault();
     if (!supabase) return;
     setSaving(true);
+    setMigrationError(false);
     
     const { error } = await supabase
       .from('profiles')
@@ -78,7 +81,11 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
       .eq('id', user.id);
       
     if (error) {
-      alert("Gagal update profil: " + error.message);
+      if (error.message.includes('Could not find') || error.message.includes('column')) {
+         setMigrationError(true);
+      } else {
+         alert("Gagal update profil: " + error.message);
+      }
     } else {
       alert("Profil berhasil diperbarui!");
     }
@@ -94,7 +101,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
 
   const copyAffiliateLink = () => {
     if (!user.affiliate_code) return;
-    // Assuming the app is deployed at the current origin
     const link = `${window.location.origin}/#/login?ref=${user.affiliate_code}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
@@ -113,7 +119,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
          return;
      }
 
-     // Fetch store settings for admin WA
      const { data: settings } = await supabase!
         .from('settings')
         .select('value')
@@ -178,6 +183,30 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
            <form onSubmit={handleUpdateProfile} className="max-w-xl">
               <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><User className="text-primary"/> Data Pribadi</h2>
               
+              {migrationError && (
+                 <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg mb-6">
+                    <div className="flex items-center gap-2 text-yellow-500 font-bold mb-2">
+                       <AlertTriangle size={20} /> Struktur Database Belum Update
+                    </div>
+                    <p className="text-sm text-yellow-200 mb-2">
+                       Tabel database Anda belum memiliki kolom untuk rekening bank. Silakan Copy kode SQL di bawah ini dan jalankan di <strong>Supabase SQL Editor</strong>.
+                    </p>
+                    <div className="bg-slate-950 p-3 rounded font-mono text-xs text-green-400 relative">
+                       <pre>{BANK_MIGRATION_SQL}</pre>
+                       <button 
+                          type="button"
+                          onClick={() => {
+                             navigator.clipboard.writeText(BANK_MIGRATION_SQL);
+                             alert("SQL disalin! Buka Supabase > SQL Editor > Paste > Run.");
+                          }}
+                          className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded text-[10px]"
+                       >
+                          Copy SQL
+                       </button>
+                    </div>
+                 </div>
+              )}
+
               <div className="space-y-4 mb-8">
                  <div>
                     <label className="block text-sm text-slate-400 mb-1">Nama Lengkap</label>
