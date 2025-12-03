@@ -88,24 +88,6 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
      setVoucherError('');
   };
 
-  const processAffiliateCommission = async (referrerCode: string, orderTotal: number) => {
-    if (!referrerCode || !settings.affiliate_commission_rate || settings.affiliate_commission_rate <= 0) return;
-    if (!supabase) return;
-
-    const { data: referrer } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('affiliate_code', referrerCode)
-      .single();
-
-    if (referrer) {
-      const commissionAmount = Math.floor(orderTotal * (settings.affiliate_commission_rate / 100));
-      if (commissionAmount > 0) {
-        await supabase.rpc('increment_balance', { user_id: referrer.id, amount: commissionAmount });
-      }
-    }
-  };
-
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
@@ -174,6 +156,9 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
             } else {
                 throw new Error("Gagal membuat akun.");
             }
+        } else if (userReferral && !user?.referred_by) {
+             // If existing user doesn't have referral but clicked a link, update their profile
+             await supabase.from('profiles').update({ referred_by: userReferral }).eq('id', userId);
         }
 
         // 2. Create Order
@@ -187,18 +172,16 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
             total_amount: finalTotal,
             status: 'pending',
             payment_method: selectedMethod,
-            items: cart
+            items: cart,
+            commission_paid: false // Ensure this is false initially
           })
           .select()
           .single();
 
         if (error || !order) throw error;
 
-        // 3. Process Affiliate
-        if (userReferral) {
-            await processAffiliateCommission(userReferral, finalTotal);
-        }
-
+        // Note: Commission Logic moved to AdminOrders (triggered on 'completed')
+        
         setLastOrderTotal(finalTotal);
         setOrderSuccess(order.id);
         clearCart();
@@ -257,6 +240,22 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                         <p className="text-sm text-slate-500">a.n {wallet.name}</p>
                     </div>
                 ))}
+             </div>
+           )}
+
+           {selectedMethod === 'QRIS' && (
+             <div className="space-y-4 flex flex-col items-center">
+                <p className="text-sm text-slate-400">Scan QRIS untuk membayar:</p>
+                {settings.qris_url ? (
+                  <div className="bg-white p-4 rounded-lg inline-block">
+                    <img src={settings.qris_url} alt="QRIS" className="w-48 h-48 object-contain" />
+                  </div>
+                ) : (
+                  <div className="bg-slate-900 p-8 rounded text-center text-slate-500">
+                    <QrCode size={48} className="mx-auto mb-2 opacity-50"/>
+                    <p className="text-xs">QRIS belum diupload oleh Admin.</p>
+                  </div>
+                )}
              </div>
            )}
            

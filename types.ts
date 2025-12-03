@@ -49,6 +49,7 @@ export interface Order {
   discount_amount?: number;
   voucher_code?: string;
   status: 'pending' | 'processing' | 'completed' | 'cancelled';
+  commission_paid?: boolean; // New field to track if affiliate has been paid
   payment_method: string;
   payment_proof?: string;
   items: OrderItem[];

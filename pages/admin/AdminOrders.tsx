@@ -1,15 +1,16 @@
 
 import React, { useEffect, useState } from 'react';
-import { getSupabase } from '../../services/supabase';
+import { getSupabase, COMMISSION_MIGRATION_SQL } from '../../services/supabase';
 import { Order } from '../../types';
 import { formatRupiah } from '../../services/helpers';
-import { ClipboardList, Filter, ChevronDown, CheckCircle, XCircle, Clock, Loader2 } from 'lucide-react';
+import { ClipboardList, Filter, ChevronDown, CheckCircle, XCircle, Clock, Loader2, DollarSign, AlertTriangle } from 'lucide-react';
 
 const AdminOrders: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [filter, setFilter] = useState('all');
+  const [showSql, setShowSql] = useState(false);
 
   const supabase = getSupabase();
 
@@ -33,26 +34,89 @@ const AdminOrders: React.FC = () => {
     fetchOrders();
   }, []);
 
+  const processCommission = async (order: Order) => {
+    if (!supabase || order.commission_paid || !order.user_id) return;
+    
+    // 1. Check if user was referred
+    const { data: userProfile } = await supabase
+        .from('profiles')
+        .select('referred_by')
+        .eq('id', order.user_id)
+        .single();
+        
+    if (!userProfile || !userProfile.referred_by) return; // No referral
+
+    // 2. Get affiliate profile
+    const { data: affiliate } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('affiliate_code', userProfile.referred_by)
+        .single();
+    
+    if (!affiliate) return;
+
+    // 3. Get Commission Rate
+    const { data: settings } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'store_settings')
+        .single();
+    
+    const rate = settings?.value?.affiliate_commission_rate || 0;
+    if (rate <= 0) return;
+
+    // 4. Calculate & Add Balance
+    const commission = Math.floor(order.total_amount * (rate / 100));
+    if (commission > 0) {
+        const { error } = await supabase.rpc('increment_balance', { 
+            user_id: affiliate.id, 
+            amount: commission 
+        });
+
+        if (!error) {
+            // 5. Mark order as commission paid
+            await supabase
+                .from('orders')
+                .update({ commission_paid: true })
+                .eq('id', order.id);
+            
+            console.log(`Commission of ${commission} added to affiliate ${affiliate.id}`);
+        } else {
+            console.error("Failed to add commission", error);
+        }
+    }
+  };
+
   const updateStatus = async (orderId: string, newStatus: string) => {
      if (!supabase) return;
      setUpdatingId(orderId);
      
-     // Gunakan .select() untuk memastikan data benar-benar terupdate dan dikembalikan oleh DB
+     // Update status
      const { data, error } = await supabase
         .from('orders')
         .update({ status: newStatus })
         .eq('id', orderId)
-        .select();
+        .select()
+        .single();
      
      setUpdatingId(null);
 
-     if (!error && data && data.length > 0) {
-        // Update local state hanya jika sukses
+     if (!error && data) {
+        // Update local state
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus as any } : o));
+
+        // IF STATUS IS COMPLETED -> TRIGGER COMMISSION
+        if (newStatus === 'completed') {
+            await processCommission(data as Order);
+        }
      } else {
         console.error("Update error:", error);
-        alert("Gagal update status. Pastikan Anda sudah menjalankan SQL Policy 'Admins can update orders' di Supabase.");
-        // Refresh data untuk mengembalikan status asli di UI
+        if (error?.message?.includes('commission_paid')) {
+             alert("Error: Kolom 'commission_paid' tidak ditemukan. Silakan jalankan SQL migrasi di bawah.");
+             setShowSql(true);
+        } else {
+             alert("Gagal update status. Pastikan RLS Policy sudah aktif.");
+        }
         fetchOrders();
      }
   };
@@ -100,6 +164,22 @@ const AdminOrders: React.FC = () => {
         </div>
       </div>
 
+      {showSql && (
+         <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg mb-6">
+             <div className="flex items-center gap-2 text-yellow-500 font-bold mb-2">
+                <AlertTriangle size={20} /> Update Database Diperlukan
+             </div>
+             <p className="text-sm text-yellow-200 mb-2">Agar komisi affiliate berjalan lancar, jalankan kode ini di Supabase:</p>
+             <div className="bg-slate-950 p-3 rounded font-mono text-xs text-green-400 relative overflow-x-auto">
+                 <pre>{COMMISSION_MIGRATION_SQL}</pre>
+                 <button 
+                   onClick={() => navigator.clipboard.writeText(COMMISSION_MIGRATION_SQL)} 
+                   className="absolute top-2 right-2 bg-slate-800 text-white px-2 py-1 rounded"
+                 >Copy</button>
+             </div>
+         </div>
+      )}
+
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -126,7 +206,7 @@ const AdminOrders: React.FC = () => {
                       <div className="text-xs text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</div>
                     </td>
                     <td className="p-4">
-                      <div className="font-medium text-white">{order.profiles?.full_name || 'Unknown'}</div>
+                      <div className="font-medium text-white">{order.profiles?.full_name || 'Guest/Unknown'}</div>
                       <div className="text-xs text-slate-500">{order.profiles?.email}</div>
                     </td>
                     <td className="p-4 font-bold text-slate-200">
