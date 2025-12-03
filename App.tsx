@@ -179,28 +179,29 @@ const App: React.FC = () => {
     <Router>
       <Layout user={user} setUser={setUser} cartCount={cart.length}>
         <Routes>
-          {/* PROTECTED ROUTES: Redirect to /login if not authenticated */}
+          {/* PUBLIC ROUTES: Open to everyone */}
           <Route 
             path="/" 
-            element={user ? <HomePage addToCart={addToCart} settings={settings} /> : <Navigate to="/login" replace />} 
+            element={<HomePage addToCart={addToCart} settings={settings} />} 
           />
           
           <Route 
             path="/product/:id" 
-            element={user ? <ProductDetail addToCart={addToCart} /> : <Navigate to="/login" replace />} 
+            element={<ProductDetail addToCart={addToCart} />} 
           />
           
           <Route 
             path="/cart" 
-            element={user ? <CartPage cart={cart} removeFromCart={removeFromCart} clearCart={clearCart} user={user} settings={settings} /> : <Navigate to="/login" replace />} 
+            element={<CartPage cart={cart} removeFromCart={removeFromCart} clearCart={clearCart} user={user} settings={settings} />} 
           />
           
+          {/* PROTECTED ROUTES */}
           <Route 
             path="/profile" 
             element={user ? <ProfilePage user={user} /> : <Navigate to="/login" replace />} 
           />
           
-          {/* AUTH ROUTE: Redirect to / if already authenticated */}
+          {/* AUTH ROUTE */}
           <Route 
             path="/login" 
             element={!user ? <AuthPage onLoginSuccess={checkSession} /> : <Navigate to="/" replace />} 

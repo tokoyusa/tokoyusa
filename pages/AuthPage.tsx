@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { getSupabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
-import { ShoppingBag, Lock, User as UserIcon, Ticket } from 'lucide-react';
+import { ShoppingBag, Lock, User as UserIcon, Ticket, X } from 'lucide-react';
 
 interface AuthPageProps {
   onLoginSuccess: () => void;
@@ -121,6 +121,14 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">
       <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl border border-slate-700 w-full max-w-md relative overflow-hidden">
+        <button 
+           onClick={() => navigate('/')} 
+           className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors bg-slate-700/50 p-1 rounded-full z-20"
+           title="Kembali ke Toko"
+        >
+           <X size={20} />
+        </button>
+
         <div className="absolute -top-10 -right-10 w-32 h-32 bg-primary/10 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-accent/10 rounded-full blur-3xl"></div>
 

@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { getSupabase, BANK_MIGRATION_SQL } from '../services/supabase';
 import { UserProfile, Order } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check, AlertTriangle, RefreshCw, Star } from 'lucide-react';
+import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check, AlertTriangle, RefreshCw, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface ProfilePageProps {
@@ -81,7 +81,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
       .eq('id', user.id);
       
     if (error) {
-      // Check for schema cache errors
       if (error.message.includes('Could not find') || error.message.includes('column') || error.message.includes('schema cache')) {
          setMigrationError(true);
       } else {
@@ -96,7 +95,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
   const handleLogout = async () => {
     if (supabase) {
       await (supabase.auth as any).signOut();
-      window.location.reload();
+      window.location.href = '/';
     }
   };
 
@@ -106,6 +105,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
     navigator.clipboard.writeText(link);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const generateAffiliateCode = async () => {
+      if(!supabase) return;
+      const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+      await supabase.from('profiles').update({ affiliate_code: code }).eq('id', user.id);
+      setActiveTab('affiliate');
+      window.location.reload();
   };
 
   const handleWithdrawal = async () => {
@@ -135,33 +142,43 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
   return (
     <div className="py-6 max-w-4xl mx-auto">
       {/* Header Profile */}
-      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 flex flex-col md:flex-row items-center gap-6 mb-8">
-        <div className="w-20 h-20 bg-slate-700 rounded-full flex items-center justify-center text-slate-300 text-2xl font-bold">
-           {user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
+      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 mb-8">
+        <div className="flex flex-col md:flex-row items-center gap-6">
+            <div className="w-20 h-20 bg-slate-700 rounded-full flex items-center justify-center text-slate-300 text-2xl font-bold">
+            {user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
+            </div>
+            <div className="text-center md:text-left flex-1">
+            <h1 className="text-2xl font-bold text-white">{user.full_name || 'Pengguna'}</h1>
+            <p className="text-slate-400">{user.email}</p>
+            {user.role === 'admin' && (
+                <span className="inline-block bg-primary/20 text-primary text-xs px-2 py-1 rounded mt-2 font-bold">ADMINISTRATOR</span>
+            )}
+            </div>
+            <div className="flex flex-col gap-2 w-full md:w-auto">
+                <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 min-w-[150px]">
+                    <p className="text-xs text-slate-500 mb-1">Saldo Affiliate</p>
+                    <p className="text-xl font-bold text-green-400">{formatRupiah(user.balance || 0)}</p>
+                </div>
+            </div>
         </div>
-        <div className="text-center md:text-left flex-1">
-           <h1 className="text-2xl font-bold text-white">{user.full_name || 'Pengguna'}</h1>
-           <p className="text-slate-400">{user.email}</p>
-           {user.role === 'admin' && (
-              <span className="inline-block bg-primary/20 text-primary text-xs px-2 py-1 rounded mt-2 font-bold">ADMINISTRATOR</span>
-           )}
-           
-           {/* Tombol Daftar Affiliate jika belum */}
-           {!user.affiliate_code && (
-              <button 
-                 onClick={() => setActiveTab('affiliate')}
-                 className="mt-3 text-xs bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1.5 rounded-full flex items-center gap-1 font-bold animate-pulse"
-              >
-                 <Star size={12} fill="white" /> Daftar Affiliate
-              </button>
-           )}
-        </div>
-        <div className="flex flex-col gap-2 w-full md:w-auto">
-             <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 min-w-[150px]">
-                <p className="text-xs text-slate-500 mb-1">Saldo Affiliate</p>
-                <p className="text-xl font-bold text-green-400">{formatRupiah(user.balance || 0)}</p>
-             </div>
-        </div>
+
+        {/* PROMINENT REGISTER AFFILIATE BUTTON */}
+        {!user.affiliate_code && (
+            <div className="mt-6 pt-6 border-t border-slate-700 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div>
+                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                        <Sparkles className="text-accent" size={18} /> Jadi Affiliate & Dapat Uang
+                    </h3>
+                    <p className="text-sm text-slate-400">Bagikan link, dapatkan komisi dari setiap penjualan.</p>
+                </div>
+                <button 
+                    onClick={generateAffiliateCode}
+                    className="bg-accent hover:bg-yellow-600 text-white font-bold px-6 py-2 rounded-lg flex items-center gap-2 transition-transform transform hover:scale-105 shadow-lg shadow-accent/20"
+                >
+                    <Gift size={18} /> Daftar Affiliate Sekarang
+                </button>
+            </div>
+        )}
       </div>
 
       {/* Tabs */}
@@ -383,15 +400,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                  <div className="text-center py-8">
                     <p className="text-slate-400 mb-4">Anda belum memiliki kode affiliate.</p>
                     <button 
-                       onClick={async () => {
-                          if(!supabase) return;
-                          const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-                          await supabase.from('profiles').update({ affiliate_code: code }).eq('id', user.id);
-                          window.location.reload();
-                       }}
-                       className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-lg font-bold flex items-center justify-center gap-2 mx-auto"
+                       onClick={generateAffiliateCode}
+                       className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-lg"
                     >
-                       <Star size={18} /> Daftar Sekarang (Gratis)
+                       Generate Kode Affiliate
                     </button>
                  </div>
               ) : (
