@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
-import { UserProfile, Order } from '../types';
 import { getSupabase } from '../services/supabase';
-import { formatRupiah, generateAffiliateCode, generateWhatsAppLink } from '../services/helpers';
-import { User, Copy, ShoppingBag, CreditCard, Gift, Save, LogOut, Download, FileText } from 'lucide-react';
+import { UserProfile, Order } from '../types';
+import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
+import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface ProfilePageProps {
@@ -11,11 +11,11 @@ interface ProfilePageProps {
 }
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
+  const [activeTab, setActiveTab] = useState<'profile' | 'orders' | 'affiliate'>('profile');
   const [orders, setOrders] = useState<Order[]>([]);
-  const [activeTab, setActiveTab] = useState<'info' | 'orders' | 'affiliate'>('info');
-  const [affiliateCode, setAffiliateCode] = useState(user.affiliate_code || '');
+  const [loadingOrders, setLoadingOrders] = useState(false);
   
-  // Profile Form State
+  // Form States
   const [formData, setFormData] = useState({
     full_name: user.full_name || '',
     phone: user.phone || '',
@@ -23,357 +23,380 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
     bank_number: user.bank_number || '',
     bank_holder: user.bank_holder || ''
   });
+  
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
   const supabase = getSupabase();
 
-  // FIX: Sync form data when user prop updates
+  // 1. Sync Form Data with User Prop & Fetch Latest Profile
   useEffect(() => {
-    setFormData({
-      full_name: user.full_name || '',
-      phone: user.phone || '',
-      bank_name: user.bank_name || '',
-      bank_number: user.bank_number || '',
-      bank_holder: user.bank_holder || ''
-    });
-    setAffiliateCode(user.affiliate_code || '');
-  }, [user]);
-
-  useEffect(() => {
-    if (!supabase) return;
-
-    const fetchOrders = async () => {
-      const { data } = await supabase.from('orders').select('*').eq('user_id', user.id).order('created_at', { ascending: false });
-      if (data) setOrders(data);
-    };
-
-    fetchOrders();
+     const syncProfile = async () => {
+        if (!supabase) return;
+        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
+        if (data) {
+            setFormData({
+                full_name: data.full_name || '',
+                phone: data.phone || '',
+                bank_name: data.bank_name || '',
+                bank_number: data.bank_number || '',
+                bank_holder: data.bank_holder || ''
+            });
+        }
+     };
+     syncProfile();
   }, [user.id]);
 
-  const activateAffiliate = async () => {
-    if (!supabase) return;
-    const code = generateAffiliateCode();
-    const { error } = await supabase.from('profiles').update({ affiliate_code: code }).eq('id', user.id);
-    if (!error) setAffiliateCode(code);
-  };
+  // 2. Fetch Orders
+  useEffect(() => {
+    const fetchOrders = async () => {
+      if (!supabase) return;
+      setLoadingOrders(true);
+      const { data } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+        
+      if (data) setOrders(data as Order[]);
+      setLoadingOrders(false);
+    };
+
+    if (activeTab === 'orders') {
+      fetchOrders();
+    }
+  }, [activeTab, user.id]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!supabase) return;
     setSaving(true);
     
-    const { error } = await supabase.from('profiles').update(formData).eq('id', user.id);
-    
+    const { error } = await supabase
+      .from('profiles')
+      .update(formData)
+      .eq('id', user.id);
+      
     if (error) {
-      alert("Gagal mengupdate profil: " + error.message);
+      alert("Gagal update profil: " + error.message);
     } else {
-      alert("Profil berhasil disimpan!");
-      window.location.reload(); // Reload to refresh global user state
+      alert("Profil berhasil diperbarui!");
     }
     setSaving(false);
   };
 
-  const handleWithdraw = async () => {
-    const minWithdraw = 100000;
-    const balance = user.balance || 0;
-
-    if (balance < minWithdraw) {
-      alert(`Minimal penarikan saldo adalah ${formatRupiah(minWithdraw)}`);
-      return;
-    }
-
-    if (!user.bank_name || !user.bank_number || !user.bank_holder) {
-      alert("Mohon lengkapi data rekening bank di menu 'Informasi Akun' terlebih dahulu.");
-      setActiveTab('info');
-      return;
-    }
-
-    // Since we don't have a 'withdrawals' table in this simple version, 
-    // we use WhatsApp to request withdrawal to Admin manually.
-    const message = `Halo Admin, saya ingin melakukan penarikan saldo Affiliate.\n\n` +
-      `Nama: ${user.full_name}\n` +
-      `Email: ${user.email}\n` +
-      `Jumlah: ${formatRupiah(balance)}\n\n` +
-      `Rekening Tujuan:\n` +
-      `Bank: ${user.bank_name}\n` +
-      `No. Rek: ${user.bank_number}\n` +
-      `A.n: ${user.bank_holder}`;
-
-    // Fetch store settings to get WA number
-    const { data: settings } = await supabase!.from('settings').select('value').eq('key', 'store_settings').single();
-    if (settings && settings.value.whatsapp_number) {
-       window.open(generateWhatsAppLink(settings.value.whatsapp_number, message), '_blank');
-    } else {
-       alert("Nomor WhatsApp Admin belum dikonfigurasi.");
-    }
-  };
-
-  // Check role manually from DB for troubleshooting UI
-  const checkAdminStatus = async () => {
-     if(!supabase) return;
-     const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true });
-     if (count === 1) {
-        await supabase.from('profiles').update({ role: 'admin' }).eq('id', user.id);
-        alert("Status diperbarui. Silakan refresh halaman.");
-        window.location.reload();
-     } else {
-        alert("Anda bukan user tunggal di database, tidak bisa auto-claim admin.");
-     }
-  };
-
   const handleLogout = async () => {
     if (supabase) {
-      await supabase.auth.signOut();
-      navigate('/login');
+      await (supabase.auth as any).signOut();
       window.location.reload();
     }
   };
 
-  const getStatusLabel = (status: string) => {
-      switch(status) {
-          case 'completed': return 'Selesai';
-          case 'processing': return 'Proses';
-          case 'cancelled': return 'Cancel';
-          default: return 'Pending';
-      }
+  const copyAffiliateLink = () => {
+    if (!user.affiliate_code) return;
+    // Assuming the app is deployed at the current origin
+    const link = `${window.location.origin}/#/login?ref=${user.affiliate_code}`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleWithdrawal = async () => {
+     if (!user.balance || user.balance < 100000) {
+         alert("Minimal penarikan adalah Rp 100.000");
+         return;
+     }
+     
+     if (!formData.bank_number) {
+         alert("Mohon lengkapi data rekening di tab 'Profil' terlebih dahulu.");
+         setActiveTab('profile');
+         return;
+     }
+
+     // Fetch store settings for admin WA
+     const { data: settings } = await supabase!
+        .from('settings')
+        .select('value')
+        .eq('key', 'store_settings')
+        .single();
+        
+     const adminWa = settings?.value?.whatsapp_number || '';
+     const msg = `Halo Admin, saya ingin menarik saldo affiliate.\n\nNama: ${user.full_name}\nSaldo: ${formatRupiah(user.balance)}\nBank: ${formData.bank_name}\nRek: ${formData.bank_number}\nA.n: ${formData.bank_holder}`;
+     
+     window.open(generateWhatsAppLink(adminWa, msg), '_blank');
   };
 
   return (
-    <div className="py-8 max-w-4xl mx-auto pb-24">
-      <div className="bg-slate-800 rounded-xl p-8 border border-slate-700 flex flex-col md:flex-row gap-6 items-center md:items-start mb-8">
-        <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center text-4xl font-bold text-slate-400">
-           {user.full_name ? user.full_name[0].toUpperCase() : <User />}
+    <div className="py-6 max-w-4xl mx-auto">
+      {/* Header Profile */}
+      <div className="bg-slate-800 rounded-xl p-6 border border-slate-700 flex flex-col md:flex-row items-center gap-6 mb-8">
+        <div className="w-20 h-20 bg-slate-700 rounded-full flex items-center justify-center text-slate-300 text-2xl font-bold">
+           {user.full_name ? user.full_name.charAt(0).toUpperCase() : 'U'}
         </div>
-        <div className="flex-1 text-center md:text-left">
-          <h1 className="text-2xl font-bold text-white">{user.full_name || 'Pengguna'}</h1>
-          <p className="text-slate-400">{user.email}</p>
-          <div className="flex flex-wrap gap-2 justify-center md:justify-start mt-2">
-            <span className="inline-block px-3 py-1 bg-primary/20 text-primary text-xs rounded-full uppercase font-bold">{user.role}</span>
-            {user.role === 'user' && (
-               <button onClick={checkAdminStatus} className="text-[10px] text-slate-500 hover:text-white underline">
-                 Cek Status Admin
-               </button>
-            )}
-          </div>
+        <div className="text-center md:text-left flex-1">
+           <h1 className="text-2xl font-bold text-white">{user.full_name || 'Pengguna'}</h1>
+           <p className="text-slate-400">{user.email}</p>
+           {user.role === 'admin' && (
+              <span className="inline-block bg-primary/20 text-primary text-xs px-2 py-1 rounded mt-2 font-bold">ADMINISTRATOR</span>
+           )}
+        </div>
+        <div className="flex flex-col gap-2 w-full md:w-auto">
+             <div className="bg-slate-900 p-3 rounded-lg border border-slate-700 min-w-[150px]">
+                <p className="text-xs text-slate-500 mb-1">Saldo Affiliate</p>
+                <p className="text-xl font-bold text-green-400">{formatRupiah(user.balance || 0)}</p>
+             </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-slate-700 mb-6 overflow-x-auto no-scrollbar">
-        <button onClick={() => setActiveTab('info')} className={`px-6 py-3 font-medium whitespace-nowrap ${activeTab === 'info' ? 'text-primary border-b-2 border-primary' : 'text-slate-400'}`}>Informasi Akun</button>
-        <button onClick={() => setActiveTab('orders')} className={`px-6 py-3 font-medium whitespace-nowrap ${activeTab === 'orders' ? 'text-primary border-b-2 border-primary' : 'text-slate-400'}`}>Riwayat Pesanan</button>
-        <button onClick={() => setActiveTab('affiliate')} className={`px-6 py-3 font-medium whitespace-nowrap ${activeTab === 'affiliate' ? 'text-primary border-b-2 border-primary' : 'text-slate-400'}`}>Affiliate Program</button>
+      <div className="flex overflow-x-auto space-x-2 mb-6 pb-2 no-scrollbar">
+        <button 
+           onClick={() => setActiveTab('profile')}
+           className={`px-4 py-2 rounded-lg flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === 'profile' ? 'bg-primary text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+        >
+           <User size={18} /> Profil & Rekening
+        </button>
+        <button 
+           onClick={() => setActiveTab('orders')}
+           className={`px-4 py-2 rounded-lg flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === 'orders' ? 'bg-primary text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+        >
+           <Package size={18} /> Riwayat Pesanan
+        </button>
+        <button 
+           onClick={() => setActiveTab('affiliate')}
+           className={`px-4 py-2 rounded-lg flex items-center gap-2 whitespace-nowrap transition-colors ${activeTab === 'affiliate' ? 'bg-primary text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+        >
+           <Gift size={18} /> Affiliate Program
+        </button>
       </div>
 
       {/* Content */}
-      <div className="min-h-[300px]">
-        {activeTab === 'info' && (
-           <form onSubmit={handleUpdateProfile} className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-6">
-              <div>
-                <h3 className="font-bold text-lg mb-4 text-white">Data Pribadi</h3>
-                <div className="grid md:grid-cols-2 gap-4">
-                  <div>
+      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 min-h-[400px]">
+        
+        {/* TAB: PROFILE */}
+        {activeTab === 'profile' && (
+           <form onSubmit={handleUpdateProfile} className="max-w-xl">
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><User className="text-primary"/> Data Pribadi</h2>
+              
+              <div className="space-y-4 mb-8">
+                 <div>
                     <label className="block text-sm text-slate-400 mb-1">Nama Lengkap</label>
                     <input 
-                      type="text" 
-                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
-                      value={formData.full_name}
-                      onChange={e => setFormData({...formData, full_name: e.target.value})}
+                       type="text" 
+                       className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:border-primary outline-none"
+                       value={formData.full_name}
+                       onChange={e => setFormData({...formData, full_name: e.target.value})}
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">Nomor WhatsApp / HP</label>
+                 </div>
+                 <div>
+                    <label className="block text-sm text-slate-400 mb-1">Email (Tidak bisa diubah)</label>
                     <input 
-                      type="text" 
-                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
-                      value={formData.phone}
-                      onChange={e => setFormData({...formData, phone: e.target.value})}
-                      placeholder="08..."
+                       type="email" disabled
+                       className="w-full bg-slate-900/50 border border-slate-700 rounded p-2 text-slate-500 cursor-not-allowed"
+                       value={user.email}
                     />
-                  </div>
-                </div>
+                 </div>
+                 <div>
+                    <label className="block text-sm text-slate-400 mb-1">No. WhatsApp</label>
+                    <div className="relative">
+                       <Smartphone size={16} className="absolute left-3 top-3 text-slate-500" />
+                       <input 
+                          type="text" 
+                          className="w-full bg-slate-900 border border-slate-600 rounded p-2 pl-9 focus:border-primary outline-none"
+                          placeholder="0812..."
+                          value={formData.phone}
+                          onChange={e => setFormData({...formData, phone: e.target.value})}
+                       />
+                    </div>
+                 </div>
               </div>
 
-              <div className="border-t border-slate-700 pt-6">
-                <h3 className="font-bold text-lg mb-4 text-white flex items-center gap-2">
-                  <CreditCard size={20} className="text-primary" /> Data Rekening (Untuk Pencairan Affiliate)
-                </h3>
-                <div className="grid md:grid-cols-3 gap-4">
-                  <div>
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2 pt-4 border-t border-slate-700"><CreditCard className="text-primary"/> Rekening Pencairan</h2>
+              <p className="text-sm text-slate-400 mb-4">Data ini digunakan Admin untuk mentransfer komisi affiliate Anda.</p>
+              
+              <div className="space-y-4">
+                 <div>
                     <label className="block text-sm text-slate-400 mb-1">Nama Bank / E-Wallet</label>
                     <input 
-                      type="text" 
-                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
-                      value={formData.bank_name}
-                      onChange={e => setFormData({...formData, bank_name: e.target.value})}
-                      placeholder="BCA / DANA"
+                       type="text" 
+                       className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:border-primary outline-none"
+                       placeholder="Contoh: BCA / DANA"
+                       value={formData.bank_name}
+                       onChange={e => setFormData({...formData, bank_name: e.target.value})}
                     />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">Nomor Rekening</label>
-                    <input 
-                      type="text" 
-                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
-                      value={formData.bank_number}
-                      onChange={e => setFormData({...formData, bank_number: e.target.value})}
-                      placeholder="123xxxx"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm text-slate-400 mb-1">Atas Nama</label>
-                    <input 
-                      type="text" 
-                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-white"
-                      value={formData.bank_holder}
-                      onChange={e => setFormData({...formData, bank_holder: e.target.value})}
-                      placeholder="Nama Pemilik"
-                    />
-                  </div>
-                </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-1">Nomor Rekening</label>
+                        <input 
+                           type="text" 
+                           className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:border-primary outline-none"
+                           placeholder="1234567890"
+                           value={formData.bank_number}
+                           onChange={e => setFormData({...formData, bank_number: e.target.value})}
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-sm text-slate-400 mb-1">Atas Nama</label>
+                        <input 
+                           type="text" 
+                           className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:border-primary outline-none"
+                           placeholder="Nama Pemilik Rekening"
+                           value={formData.bank_holder}
+                           onChange={e => setFormData({...formData, bank_holder: e.target.value})}
+                        />
+                    </div>
+                 </div>
               </div>
 
-              <div className="pt-4 text-right">
-                <button 
-                  type="submit" 
-                  disabled={saving}
-                  className="bg-primary hover:bg-blue-600 text-white font-bold px-6 py-2 rounded-lg flex items-center gap-2 ml-auto"
-                >
-                  <Save size={18} /> {saving ? 'Menyimpan...' : 'Simpan Perubahan'}
-                </button>
+              <div className="mt-8">
+                 <button 
+                    type="submit" 
+                    disabled={saving}
+                    className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-lg flex items-center gap-2 font-bold transition-colors disabled:opacity-50"
+                 >
+                    {saving ? 'Menyimpan...' : <><Save size={18} /> Simpan Perubahan</>}
+                 </button>
               </div>
            </form>
         )}
 
+        {/* TAB: ORDERS */}
         {activeTab === 'orders' && (
-          <div className="space-y-4">
-            {orders.length === 0 ? (
-              <p className="text-slate-500 text-center py-8">Belum ada pesanan.</p>
-            ) : (
-              orders.map(order => (
-                <div key={order.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 pb-4 border-b border-slate-700">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                         <span className="font-mono text-xs bg-slate-900 px-2 py-1 rounded text-slate-400">#{order.id.slice(0,8)}</span>
-                         <span className={`text-xs px-2 py-0.5 rounded uppercase font-bold ${
-                           order.status === 'completed' ? 'bg-green-500/20 text-green-500' : 
-                           order.status === 'processing' ? 'bg-blue-500/20 text-blue-500' : 
-                           order.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500' : 'bg-red-500/20 text-red-500'
-                         }`}>{getStatusLabel(order.status)}</span>
-                      </div>
-                      <p className="text-xs text-slate-400">{new Date(order.created_at).toLocaleDateString()}</p>
-                    </div>
-                    <p className="font-bold text-white text-lg">{formatRupiah(order.total_amount)}</p>
-                  </div>
-
-                  <div className="space-y-2">
-                     {order.items && order.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between items-center bg-slate-900/50 p-2 rounded">
-                           <div className="flex items-center gap-2">
-                              <FileText size={16} className="text-slate-500" />
-                              <span className="text-sm text-slate-300">{item.product_name}</span>
-                           </div>
-                           
-                           {/* DOWNLOAD BUTTON: Only show if order is completed and file_url exists */}
-                           {order.status === 'completed' && item.file_url ? (
-                              <a 
-                                href={item.file_url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-1 text-xs bg-primary hover:bg-blue-600 text-white px-3 py-1.5 rounded transition-colors"
-                              >
-                                 <Download size={12} /> Download
-                              </a>
-                           ) : null}
-                        </div>
-                     ))}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+           <div>
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Package className="text-primary"/> Riwayat Pesanan</h2>
+              {loadingOrders ? (
+                 <div className="text-center py-10 text-slate-500">Memuat pesanan...</div>
+              ) : orders.length === 0 ? (
+                 <div className="text-center py-10 bg-slate-900/50 rounded-lg">
+                    <p className="text-slate-400 mb-2">Belum ada pesanan.</p>
+                    <button onClick={() => navigate('/')} className="text-primary hover:underline">Belanja Sekarang</button>
+                 </div>
+              ) : (
+                 <div className="space-y-4">
+                    {orders.map(order => (
+                       <div key={order.id} className="bg-slate-900 p-4 rounded-lg border border-slate-700">
+                          <div className="flex justify-between items-start mb-3 border-b border-slate-800 pb-2">
+                             <div>
+                                <span className="text-xs text-slate-500 font-mono">#{order.id.slice(0,8)}</span>
+                                <p className="text-xs text-slate-400">{new Date(order.created_at).toLocaleDateString()}</p>
+                             </div>
+                             <div className="text-right">
+                                <span className={`inline-block px-2 py-1 rounded text-xs font-bold uppercase mb-1 ${
+                                   order.status === 'completed' ? 'bg-green-500/10 text-green-500' : 
+                                   order.status === 'cancelled' ? 'bg-red-500/10 text-red-500' : 
+                                   'bg-yellow-500/10 text-yellow-500'
+                                }`}>
+                                   {order.status}
+                                </span>
+                                <p className="font-bold text-white">{formatRupiah(order.total_amount)}</p>
+                             </div>
+                          </div>
+                          
+                          <div className="space-y-2">
+                             {order.items?.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-center text-sm">
+                                   <span className="text-slate-300">{item.product_name}</span>
+                                   
+                                   {/* DOWNLOAD BUTTON Logic */}
+                                   {order.status === 'completed' ? (
+                                      item.file_url ? (
+                                         <a 
+                                            href={item.file_url} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-xs bg-primary hover:bg-blue-600 text-white px-2 py-1 rounded flex items-center gap-1 transition-colors"
+                                         >
+                                            <Download size={12} /> Download
+                                         </a>
+                                      ) : (
+                                         <span className="text-xs text-slate-500 italic">No File</span>
+                                      )
+                                   ) : (
+                                      <span className="text-xs text-slate-500">Menunggu</span>
+                                   )}
+                                </div>
+                             ))}
+                          </div>
+                       </div>
+                    ))}
+                 </div>
+              )}
+           </div>
         )}
 
+        {/* TAB: AFFILIATE */}
         {activeTab === 'affiliate' && (
-          <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
-            {!affiliateCode ? (
-              <div className="text-center py-8">
-                <Gift className="w-16 h-16 text-accent mx-auto mb-4" />
-                <h3 className="text-xl font-bold mb-2">Jadilah Affiliate Partner!</h3>
-                <p className="text-slate-400 mb-6">Dapatkan komisi untuk setiap penjualan yang menggunakan kode referral Anda.</p>
-                <button onClick={activateAffiliate} className="bg-accent hover:bg-yellow-600 text-slate-900 font-bold px-6 py-2 rounded-full transition-colors">
-                  Aktifkan Affiliate
-                </button>
-              </div>
-            ) : (
-              <div>
-                <h3 className="font-bold text-lg mb-6">Dashboard Affiliate</h3>
-                <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
-                  <div>
-                    <p className="text-sm text-slate-400 mb-1">Kode Referral Anda</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl font-mono font-bold text-accent tracking-widest">{affiliateCode}</span>
-                      <button onClick={() => navigator.clipboard.writeText(affiliateCode)} className="p-2 hover:bg-slate-800 rounded text-slate-300"><Copy size={16}/></button>
+           <div>
+              <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><Gift className="text-primary"/> Affiliate Dashboard</h2>
+              
+              {!user.affiliate_code ? (
+                 <div className="text-center py-8">
+                    <p className="text-slate-400 mb-4">Anda belum memiliki kode affiliate.</p>
+                    <button 
+                       onClick={async () => {
+                          if(!supabase) return;
+                          const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+                          await supabase.from('profiles').update({ affiliate_code: code }).eq('id', user.id);
+                          window.location.reload();
+                       }}
+                       className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-lg"
+                    >
+                       Generate Kode Affiliate
+                    </button>
+                 </div>
+              ) : (
+                 <div className="space-y-6">
+                    <div className="grid md:grid-cols-2 gap-4">
+                       <div className="bg-slate-900 p-4 rounded-lg border border-slate-700">
+                          <p className="text-sm text-slate-400 mb-1">Kode Referral Anda</p>
+                          <div className="flex items-center gap-2">
+                             <span className="text-2xl font-mono font-bold text-accent">{user.affiliate_code}</span>
+                             <button onClick={copyAffiliateLink} className="text-slate-400 hover:text-white" title="Copy Link">
+                                {copied ? <Check size={20} className="text-green-500"/> : <Copy size={20}/>}
+                             </button>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-2">Bagikan kode ini untuk mendapatkan komisi.</p>
+                       </div>
+                       
+                       <div className="bg-slate-900 p-4 rounded-lg border border-slate-700">
+                          <p className="text-sm text-slate-400 mb-1">Saldo Komisi</p>
+                          <span className="text-2xl font-bold text-green-400">{formatRupiah(user.balance || 0)}</span>
+                          <button 
+                             onClick={handleWithdrawal}
+                             disabled={!user.balance || user.balance < 100000}
+                             className="mt-3 w-full bg-green-600 hover:bg-green-700 disabled:bg-slate-700 disabled:text-slate-500 text-white py-2 rounded flex items-center justify-center gap-2 text-sm font-bold transition-colors"
+                          >
+                             <DollarSign size={16} /> Tarik Saldo (Min. 100rb)
+                          </button>
+                       </div>
                     </div>
-                  </div>
-                  <div className="text-center md:text-right">
-                    <p className="text-sm text-slate-400 mb-1">Total Saldo Komisi</p>
-                    <p className="text-3xl font-bold text-green-400">{formatRupiah(user.balance || 0)}</p>
-                  </div>
-                </div>
-                
-                <div className="bg-slate-700/30 p-4 rounded-lg border border-slate-600 mb-6">
-                  <h4 className="font-bold text-sm mb-2 text-slate-300">Rekening Pencairan</h4>
-                  {user.bank_name && user.bank_number ? (
-                     <div className="flex items-center gap-3">
-                        <CreditCard className="text-primary" size={20} />
-                        <div>
-                           <p className="text-white font-medium">{user.bank_name} - {user.bank_number}</p>
-                           <p className="text-xs text-slate-400">a.n {user.bank_holder}</p>
-                        </div>
-                        <button onClick={() => setActiveTab('info')} className="ml-auto text-xs text-primary underline">Ubah</button>
-                     </div>
-                  ) : (
-                     <div className="flex items-center justify-between">
-                        <p className="text-sm text-yellow-500">Rekening belum diatur.</p>
-                        <button onClick={() => setActiveTab('info')} className="text-xs bg-slate-700 px-3 py-1 rounded">Atur Sekarang</button>
-                     </div>
-                  )}
-                </div>
 
-                <div className="flex justify-end">
-                   <button 
-                     onClick={handleWithdraw}
-                     className="bg-green-600 hover:bg-green-700 text-white font-bold px-6 py-3 rounded-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                     disabled={(user.balance || 0) < 100000}
-                   >
-                     <DollarSign size={20} /> Tarik Saldo (Min Rp 100.000)
-                   </button>
-                </div>
-              </div>
-            )}
-          </div>
+                    <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg text-sm text-blue-200">
+                       <strong>Cara Kerja:</strong>
+                       <ul className="list-disc ml-5 mt-2 space-y-1">
+                          <li>Bagikan link referral ke teman Anda.</li>
+                          <li>Jika teman mendaftar menggunakan kode Anda dan berbelanja, Anda dapat komisi.</li>
+                          <li>Saldo bisa ditarik ke rekening bank yang terdaftar di profil.</li>
+                       </ul>
+                    </div>
+                 </div>
+              )}
+           </div>
         )}
-      </div>
 
-      <div className="mt-8 border-t border-slate-700 pt-6">
-        <button 
-          onClick={handleLogout}
-          className="w-full bg-slate-700 hover:bg-red-600 text-slate-200 hover:text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
-        >
-          <LogOut size={20} /> Logout dari Aplikasi
-        </button>
       </div>
+      
+      {/* Logout Button (Mobile Friendly) */}
+      <button 
+        onClick={handleLogout}
+        className="w-full mt-8 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+      >
+         <LogOut size={20} /> Logout dari Aplikasi
+      </button>
+
     </div>
   );
 };
-
-// Simple Icon component for the button
-const DollarSign = ({ size, className }: { size: number, className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <line x1="12" y1="1" x2="12" y2="23"></line>
-      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-    </svg>
-);
 
 export default ProfilePage;

@@ -52,7 +52,7 @@ const App: React.FC = () => {
       }
 
       // Check Session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      const { data: { session }, error: sessionError } = await (supabase.auth as any).getSession();
       
       if (session) {
         // Fetch Profile
@@ -115,7 +115,7 @@ const App: React.FC = () => {
     checkSession();
 
     // Listen for auth changes
-    const { data: authListener } = client.auth.onAuthStateChange(async (_event, session) => {
+    const { data: authListener } = (client.auth as any).onAuthStateChange(async (_event: any, session: any) => {
       if (session) {
           // Slight delay to ensure profile is created if this is a signup event
           setTimeout(async () => {

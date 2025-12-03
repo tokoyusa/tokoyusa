@@ -82,7 +82,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     try {
       if (isLogin) {
         // LOGIN FLOW
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await (supabase.auth as any).signInWithPassword({ email, password });
         if (error) throw error;
         
         // Ensure profile exists
@@ -91,7 +91,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
         }
       } else {
         // SIGNUP FLOW
-        const { data, error } = await supabase.auth.signUp({ 
+        const { data, error } = await (supabase.auth as any).signUp({ 
             email, 
             password,
             options: { data: { full_name: fullName } } 

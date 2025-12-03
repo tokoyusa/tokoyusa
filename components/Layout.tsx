@@ -20,7 +20,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
 
   const handleLogout = async () => {
     if (supabase) {
-      await supabase.auth.signOut();
+      await (supabase.auth as any).signOut();
       setUser(null);
       navigate('/login');
     }
