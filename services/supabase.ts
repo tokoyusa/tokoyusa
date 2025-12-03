@@ -149,4 +149,7 @@ export const BANK_MIGRATION_SQL = `
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_name text;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_number text;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_holder text;
+
+-- FORCE REFRESH SCHEMA CACHE --
+NOTIFY pgrst, 'reload config';
 `;

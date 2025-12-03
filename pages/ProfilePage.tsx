@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { getSupabase, BANK_MIGRATION_SQL } from '../services/supabase';
 import { UserProfile, Order } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check, AlertTriangle } from 'lucide-react';
+import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface ProfilePageProps {
@@ -81,7 +81,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
       .eq('id', user.id);
       
     if (error) {
-      if (error.message.includes('Could not find') || error.message.includes('column')) {
+      // Check for schema cache errors
+      if (error.message.includes('Could not find') || error.message.includes('column') || error.message.includes('schema cache')) {
          setMigrationError(true);
       } else {
          alert("Gagal update profil: " + error.message);
@@ -184,14 +185,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
               <h2 className="text-xl font-bold mb-6 flex items-center gap-2"><User className="text-primary"/> Data Pribadi</h2>
               
               {migrationError && (
-                 <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg mb-6">
+                 <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg mb-6 animate-pulse">
                     <div className="flex items-center gap-2 text-yellow-500 font-bold mb-2">
-                       <AlertTriangle size={20} /> Struktur Database Belum Update
+                       <AlertTriangle size={20} /> Perbaikan Database Diperlukan
                     </div>
                     <p className="text-sm text-yellow-200 mb-2">
-                       Tabel database Anda belum memiliki kolom untuk rekening bank. Silakan Copy kode SQL di bawah ini dan jalankan di <strong>Supabase SQL Editor</strong>.
+                       Supabase belum mendeteksi kolom rekening bank. Silakan copy & jalankan kode di bawah ini di <strong>Supabase SQL Editor</strong> untuk memperbaikinya.
                     </p>
-                    <div className="bg-slate-950 p-3 rounded font-mono text-xs text-green-400 relative">
+                    <div className="bg-slate-950 p-3 rounded font-mono text-xs text-green-400 relative overflow-x-auto">
                        <pre>{BANK_MIGRATION_SQL}</pre>
                        <button 
                           type="button"
@@ -202,6 +203,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                           className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded text-[10px]"
                        >
                           Copy SQL
+                       </button>
+                    </div>
+                    <div className="mt-3 border-t border-yellow-500/20 pt-2 flex justify-end">
+                       <button 
+                          type="button"
+                          onClick={() => window.location.reload()}
+                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-bold flex items-center gap-2"
+                       >
+                          <RefreshCw size={14} className="animate-spin-slow" /> Sudah Dijalankan? Refresh App
                        </button>
                     </div>
                  </div>
