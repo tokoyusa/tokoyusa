@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { getSupabase, COMMISSION_MIGRATION_SQL } from '../../services/supabase';
+import { getSupabase, FIX_AFFILIATE_AND_QRIS_SQL } from '../../services/supabase';
 import { Order } from '../../types';
 import { formatRupiah } from '../../services/helpers';
 import { ClipboardList, Filter, ChevronDown, CheckCircle, XCircle, Clock, Loader2, DollarSign, AlertTriangle } from 'lucide-react';
@@ -68,6 +68,7 @@ const AdminOrders: React.FC = () => {
     // 4. Calculate & Add Balance
     const commission = Math.floor(order.total_amount * (rate / 100));
     if (commission > 0) {
+        // Use RPC to safely increment balance
         const { error } = await supabase.rpc('increment_balance', { 
             user_id: affiliate.id, 
             amount: commission 
@@ -83,6 +84,11 @@ const AdminOrders: React.FC = () => {
             console.log(`Commission of ${commission} added to affiliate ${affiliate.id}`);
         } else {
             console.error("Failed to add commission", error);
+            // Detect if the function is missing
+            if (error.message.includes('function') && error.message.includes('does not exist')) {
+                 alert("Gagal memproses komisi: Fungsi Database 'increment_balance' belum dibuat. Silakan jalankan SQL perbaikan di bawah.");
+                 setShowSql(true);
+            }
         }
     }
   };
@@ -112,10 +118,10 @@ const AdminOrders: React.FC = () => {
      } else {
         console.error("Update error:", error);
         if (error?.message?.includes('commission_paid')) {
-             alert("Error: Kolom 'commission_paid' tidak ditemukan. Silakan jalankan SQL migrasi di bawah.");
+             alert("Error: Kolom 'commission_paid' tidak ditemukan di database. Silakan jalankan SQL perbaikan di bawah.");
              setShowSql(true);
         } else {
-             alert("Gagal update status. Pastikan RLS Policy sudah aktif.");
+             alert("Gagal update status: " + error.message);
         }
         fetchOrders();
      }
@@ -165,17 +171,27 @@ const AdminOrders: React.FC = () => {
       </div>
 
       {showSql && (
-         <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg mb-6">
+         <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg mb-6 animate-pulse">
              <div className="flex items-center gap-2 text-yellow-500 font-bold mb-2">
-                <AlertTriangle size={20} /> Update Database Diperlukan
+                <AlertTriangle size={20} /> Perbaikan Database (Affiliate Error)
              </div>
-             <p className="text-sm text-yellow-200 mb-2">Agar komisi affiliate berjalan lancar, jalankan kode ini di Supabase:</p>
+             <p className="text-sm text-yellow-200 mb-2">
+                Sistem gagal memproses komisi karena fungsi database hilang. Copy & jalankan kode ini di Supabase SQL Editor:
+             </p>
              <div className="bg-slate-950 p-3 rounded font-mono text-xs text-green-400 relative overflow-x-auto">
-                 <pre>{COMMISSION_MIGRATION_SQL}</pre>
+                 <pre>{FIX_AFFILIATE_AND_QRIS_SQL}</pre>
                  <button 
-                   onClick={() => navigator.clipboard.writeText(COMMISSION_MIGRATION_SQL)} 
-                   className="absolute top-2 right-2 bg-slate-800 text-white px-2 py-1 rounded"
+                   onClick={() => {
+                      navigator.clipboard.writeText(FIX_AFFILIATE_AND_QRIS_SQL);
+                      alert("Copied!");
+                   }} 
+                   className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded"
                  >Copy</button>
+             </div>
+             <div className="mt-2 text-right">
+                <button onClick={() => window.location.reload()} className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded">
+                   Refresh App
+                </button>
              </div>
          </div>
       )}
@@ -204,6 +220,7 @@ const AdminOrders: React.FC = () => {
                     <td className="p-4">
                       <span className="font-mono text-xs bg-slate-900 px-2 py-1 rounded text-slate-300">#{order.id.slice(0,8)}</span>
                       <div className="text-xs text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</div>
+                      {order.commission_paid && <span className="text-[10px] text-green-500 flex items-center gap-0.5 mt-0.5"><DollarSign size={8}/> Komisi Paid</span>}
                     </td>
                     <td className="p-4">
                       <div className="font-medium text-white">{order.profiles?.full_name || 'Guest/Unknown'}</div>

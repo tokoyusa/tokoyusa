@@ -157,7 +157,7 @@ create or replace function increment_balance(user_id uuid, amount numeric)
 returns void as $$
 begin
   update public.profiles
-  set balance = balance + amount
+  set balance = coalesce(balance, 0) + amount
   where id = user_id;
 end;
 $$ language plpgsql security definer;
@@ -209,5 +209,23 @@ ALTER TABLE public.orders ALTER COLUMN user_id DROP NOT NULL;
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS guest_info jsonb;
 DROP POLICY IF EXISTS "Users can insert orders." ON public.orders;
 CREATE POLICY "Public can insert orders" ON public.orders FOR INSERT WITH CHECK (true);
+NOTIFY pgrst, 'reload config';
+`;
+
+export const FIX_AFFILIATE_AND_QRIS_SQL = `
+-- 1. Buat fungsi tambah saldo (Wajib untuk affiliate)
+create or replace function increment_balance(user_id uuid, amount numeric)
+returns void as $$
+begin
+  update public.profiles
+  set balance = coalesce(balance, 0) + amount
+  where id = user_id;
+end;
+$$ language plpgsql security definer;
+
+-- 2. Pastikan kolom status pembayaran komisi ada
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS commission_paid boolean DEFAULT false;
+
+-- 3. Refresh konfigurasi
 NOTIFY pgrst, 'reload config';
 `;

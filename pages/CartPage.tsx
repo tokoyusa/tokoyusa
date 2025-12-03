@@ -247,8 +247,8 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
              <div className="space-y-4 flex flex-col items-center">
                 <p className="text-sm text-slate-400">Scan QRIS untuk membayar:</p>
                 {settings.qris_url ? (
-                  <div className="bg-white p-4 rounded-lg inline-block">
-                    <img src={settings.qris_url} alt="QRIS" className="w-48 h-48 object-contain" />
+                  <div className="bg-white p-2 rounded-lg inline-block w-full max-w-[250px] min-h-[200px] flex items-center justify-center">
+                    <img src={settings.qris_url} alt="QRIS" className="w-full h-auto object-contain" />
                   </div>
                 ) : (
                   <div className="bg-slate-900 p-8 rounded text-center text-slate-500">
