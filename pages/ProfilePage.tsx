@@ -4,6 +4,7 @@ import { UserProfile, Order } from '../types';
 import { getSupabase } from '../services/supabase';
 import { formatRupiah, generateAffiliateCode, generateWhatsAppLink } from '../services/helpers';
 import { User, Copy, ShoppingBag, CreditCard, Gift, Save, LogOut, Download, FileText } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface ProfilePageProps {
   user: UserProfile;
@@ -23,8 +24,20 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
     bank_holder: user.bank_holder || ''
   });
   const [saving, setSaving] = useState(false);
-
+  const navigate = useNavigate();
   const supabase = getSupabase();
+
+  // FIX: Sync form data when user prop updates
+  useEffect(() => {
+    setFormData({
+      full_name: user.full_name || '',
+      phone: user.phone || '',
+      bank_name: user.bank_name || '',
+      bank_number: user.bank_number || '',
+      bank_holder: user.bank_holder || ''
+    });
+    setAffiliateCode(user.affiliate_code || '');
+  }, [user]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -55,6 +68,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
       alert("Gagal mengupdate profil: " + error.message);
     } else {
       alert("Profil berhasil disimpan!");
+      window.location.reload(); // Reload to refresh global user state
     }
     setSaving(false);
   };
@@ -107,6 +121,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
      }
   };
 
+  const handleLogout = async () => {
+    if (supabase) {
+      await supabase.auth.signOut();
+      navigate('/login');
+      window.location.reload();
+    }
+  };
+
   const getStatusLabel = (status: string) => {
       switch(status) {
           case 'completed': return 'Selesai';
@@ -117,7 +139,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
   };
 
   return (
-    <div className="py-8 max-w-4xl mx-auto">
+    <div className="py-8 max-w-4xl mx-auto pb-24">
       <div className="bg-slate-800 rounded-xl p-8 border border-slate-700 flex flex-col md:flex-row gap-6 items-center md:items-start mb-8">
         <div className="w-24 h-24 bg-slate-700 rounded-full flex items-center justify-center text-4xl font-bold text-slate-400">
            {user.full_name ? user.full_name[0].toUpperCase() : <User />}
@@ -332,6 +354,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
             )}
           </div>
         )}
+      </div>
+
+      <div className="mt-8 border-t border-slate-700 pt-6">
+        <button 
+          onClick={handleLogout}
+          className="w-full bg-slate-700 hover:bg-red-600 text-slate-200 hover:text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
+        >
+          <LogOut size={20} /> Logout dari Aplikasi
+        </button>
       </div>
     </div>
   );
