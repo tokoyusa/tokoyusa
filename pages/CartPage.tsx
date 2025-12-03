@@ -1,8 +1,8 @@
 
 import React, { useState } from 'react';
-import { CartItem, UserProfile, StoreSettings } from '../types';
+import { CartItem, UserProfile, StoreSettings, Voucher } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone } from 'lucide-react';
+import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X } from 'lucide-react';
 import { getSupabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 
@@ -20,10 +20,71 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('TRANSFER');
   const [processing, setProcessing] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
-  const [lastOrderTotal, setLastOrderTotal] = useState(0); // Store total for success message
+  const [lastOrderTotal, setLastOrderTotal] = useState(0); 
+  
+  // Voucher States
+  const [voucherCode, setVoucherCode] = useState('');
+  const [checkingVoucher, setCheckingVoucher] = useState(false);
+  const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
+  const [voucherError, setVoucherError] = useState('');
+
   const navigate = useNavigate();
 
-  const total = cart.reduce((acc, item) => acc + (item.discount_price || item.price) * item.quantity, 0);
+  // Basic total from items
+  const subtotal = cart.reduce((acc, item) => acc + (item.discount_price || item.price) * item.quantity, 0);
+
+  // Calculate discount
+  let discountAmount = 0;
+  if (appliedVoucher) {
+     if (appliedVoucher.discount_type === 'percentage') {
+        discountAmount = Math.floor(subtotal * (appliedVoucher.discount_value / 100));
+     } else {
+        discountAmount = appliedVoucher.discount_value;
+     }
+  }
+  // Ensure discount doesn't exceed subtotal
+  if (discountAmount > subtotal) discountAmount = subtotal;
+
+  const finalTotal = subtotal - discountAmount;
+
+  const handleApplyVoucher = async () => {
+    if (!voucherCode.trim()) return;
+    setCheckingVoucher(true);
+    setVoucherError('');
+    setAppliedVoucher(null);
+
+    const supabase = getSupabase();
+    if (!supabase) {
+      setCheckingVoucher(false);
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase
+         .from('vouchers')
+         .select('*')
+         .eq('code', voucherCode.toUpperCase().trim())
+         .eq('is_active', true)
+         .single();
+      
+      if (error || !data) {
+         setVoucherError('Voucher tidak valid atau tidak ditemukan.');
+      } else {
+         setAppliedVoucher(data as Voucher);
+      }
+    } catch (err) {
+       console.error(err);
+       setVoucherError('Terjadi kesalahan saat mengecek voucher.');
+    } finally {
+       setCheckingVoucher(false);
+    }
+  };
+
+  const removeVoucher = () => {
+     setAppliedVoucher(null);
+     setVoucherCode('');
+     setVoucherError('');
+  };
 
   const processAffiliateCommission = async (orderTotal: number) => {
     if (!user?.referred_by || !settings.affiliate_commission_rate || settings.affiliate_commission_rate <= 0) return;
@@ -65,12 +126,14 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     const supabase = getSupabase();
     
     // Create Order
-    // Note: Items saved here include file_url from Product (via CartItem extension)
     const { data: order, error } = await supabase!
       .from('orders')
       .insert({
         user_id: user.id,
-        total_amount: total,
+        subtotal: subtotal,
+        discount_amount: discountAmount,
+        voucher_code: appliedVoucher ? appliedVoucher.code : null,
+        total_amount: finalTotal,
         status: 'pending',
         payment_method: selectedMethod,
         items: cart
@@ -79,15 +142,15 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
       .single();
 
     if (error || !order) {
-      alert('Gagal membuat pesanan');
+      alert('Gagal membuat pesanan: ' + error?.message);
       setProcessing(false);
       return;
     }
 
-    // Process Affiliate Commission (Fire and Forget)
-    await processAffiliateCommission(total);
+    // Process Affiliate Commission based on FINAL total
+    await processAffiliateCommission(finalTotal);
 
-    setLastOrderTotal(total);
+    setLastOrderTotal(finalTotal);
     setOrderSuccess(order.id);
     clearCart();
     setProcessing(false);
@@ -213,13 +276,56 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
           <div className="md:col-span-1">
              <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 sticky top-24">
                 <h3 className="text-xl font-bold mb-4">Ringkasan</h3>
-                <div className="flex justify-between mb-2 text-slate-300">
-                  <span>Total Item</span>
-                  <span>{cart.length}</span>
+                
+                {/* Voucher Input */}
+                <div className="mb-6 border-b border-slate-700 pb-6">
+                   <label className="text-sm text-slate-400 mb-1 flex items-center gap-1"><Ticket size={14}/> Kode Voucher</label>
+                   {appliedVoucher ? (
+                     <div className="flex justify-between items-center bg-green-500/10 border border-green-500/20 p-2 rounded text-green-400 text-sm">
+                        <span>Kode: <strong>{appliedVoucher.code}</strong></span>
+                        <button onClick={removeVoucher}><X size={16} /></button>
+                     </div>
+                   ) : (
+                      <div className="flex gap-2">
+                        <input 
+                          type="text" 
+                          placeholder="Masukkan kode..." 
+                          className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-sm uppercase focus:border-primary outline-none"
+                          value={voucherCode}
+                          onChange={e => setVoucherCode(e.target.value)}
+                        />
+                        <button 
+                           onClick={handleApplyVoucher} 
+                           disabled={checkingVoucher || !voucherCode}
+                           className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded text-sm disabled:opacity-50"
+                        >
+                           {checkingVoucher ? <Loader2 size={16} className="animate-spin" /> : 'Pakai'}
+                        </button>
+                      </div>
+                   )}
+                   {voucherError && <p className="text-red-500 text-xs mt-1">{voucherError}</p>}
                 </div>
+
+                <div className="space-y-2 mb-4 text-slate-300">
+                   <div className="flex justify-between">
+                     <span>Total Item</span>
+                     <span>{cart.length}</span>
+                   </div>
+                   <div className="flex justify-between">
+                     <span>Subtotal</span>
+                     <span>{formatRupiah(subtotal)}</span>
+                   </div>
+                   {appliedVoucher && (
+                     <div className="flex justify-between text-green-400">
+                        <span>Diskon {appliedVoucher.discount_type === 'percentage' ? `(${appliedVoucher.discount_value}%)` : ''}</span>
+                        <span>- {formatRupiah(discountAmount)}</span>
+                     </div>
+                   )}
+                </div>
+
                 <div className="flex justify-between mb-6 text-xl font-bold text-white border-t border-slate-700 pt-2">
-                  <span>Total</span>
-                  <span>{formatRupiah(total)}</span>
+                  <span>Total Bayar</span>
+                  <span>{formatRupiah(finalTotal)}</span>
                 </div>
 
                 <div className="space-y-3 mb-6">

@@ -16,6 +16,7 @@ import AdminProducts from './pages/admin/AdminProducts';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminAffiliates from './pages/admin/AdminAffiliates';
+import AdminVouchers from './pages/admin/AdminVouchers';
 import SetupPage from './pages/SetupPage';
 
 const DEFAULT_SETTINGS: StoreSettings = {
@@ -224,6 +225,7 @@ const App: React.FC = () => {
           <Route path="/admin/products" element={user?.role === UserRole.ADMIN ? <AdminProducts /> : <Navigate to="/" />} />
           <Route path="/admin/settings" element={user?.role === UserRole.ADMIN ? <AdminSettings settings={settings} onUpdate={updateSettings} /> : <Navigate to="/" />} />
           <Route path="/admin/affiliates" element={user?.role === UserRole.ADMIN ? <AdminAffiliates /> : <Navigate to="/" />} />
+          <Route path="/admin/vouchers" element={user?.role === UserRole.ADMIN ? <AdminVouchers /> : <Navigate to="/" />} />
           
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" />} />

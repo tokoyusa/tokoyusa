@@ -93,11 +93,24 @@ create table if not exists public.products (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- VOUCHERS
+create table if not exists public.vouchers (
+  id uuid default uuid_generate_v4() primary key,
+  code text not null unique,
+  discount_type text not null, -- 'percentage' or 'nominal'
+  discount_value numeric not null,
+  is_active boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- ORDERS
 create table if not exists public.orders (
   id uuid default uuid_generate_v4() primary key,
   user_id uuid references public.profiles(id),
   total_amount numeric not null,
+  subtotal numeric,
+  discount_amount numeric,
+  voucher_code text,
   status text default 'pending', -- pending, paid, completed, failed
   payment_method text,
   payment_proof text,
@@ -121,6 +134,10 @@ alter table public.products enable row level security;
 create policy "Products are viewable by everyone." on public.products for select using (true);
 create policy "Admins can insert products." on public.products for insert with check (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 create policy "Admins can update products." on public.products for update using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+
+alter table public.vouchers enable row level security;
+create policy "Admins can manage vouchers" on public.vouchers using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+create policy "Public can read active vouchers" on public.vouchers for select using (is_active = true);
 
 alter table public.orders enable row level security;
 create policy "Users can view own orders." on public.orders for select using (auth.uid() = user_id);
@@ -151,5 +168,28 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_number text;
 ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_holder text;
 
 -- FORCE REFRESH SCHEMA CACHE --
+NOTIFY pgrst, 'reload config';
+`;
+
+export const VOUCHER_MIGRATION_SQL = `
+-- COPY KODE INI DAN JALANKAN DI SUPABASE SQL EDITOR (Jika tabel vouchers belum ada) --
+
+create table if not exists public.vouchers (
+  id uuid default uuid_generate_v4() primary key,
+  code text not null unique,
+  discount_type text not null, 
+  discount_value numeric not null,
+  is_active boolean default true,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+alter table public.vouchers enable row level security;
+create policy "Admins can manage vouchers" on public.vouchers using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+create policy "Public can read active vouchers" on public.vouchers for select using (is_active = true);
+
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS subtotal numeric;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS discount_amount numeric;
+ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS voucher_code text;
+
 NOTIFY pgrst, 'reload config';
 `;

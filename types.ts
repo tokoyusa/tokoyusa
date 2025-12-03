@@ -32,10 +32,22 @@ export interface Product {
   created_at?: string;
 }
 
+export interface Voucher {
+  id: string;
+  code: string;
+  discount_type: 'percentage' | 'nominal';
+  discount_value: number;
+  is_active: boolean;
+  created_at?: string;
+}
+
 export interface Order {
   id: string;
   user_id: string;
-  total_amount: number;
+  total_amount: number; // Final amount paid
+  subtotal?: number; // Amount before discount
+  discount_amount?: number;
+  voucher_code?: string;
   status: 'pending' | 'processing' | 'completed' | 'cancelled';
   payment_method: string;
   payment_proof?: string;

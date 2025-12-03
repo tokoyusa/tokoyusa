@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, ShoppingBag, User, List, Settings, LogOut, Menu, X, BarChart, LayoutDashboard, Users, ClipboardList } from 'lucide-react';
+import { Home, ShoppingBag, User, List, Settings, LogOut, Menu, X, BarChart, LayoutDashboard, Users, ClipboardList, Ticket } from 'lucide-react';
 import { UserRole, UserProfile } from '../types';
 import { getSupabase } from '../services/supabase';
 
@@ -39,6 +39,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
     { name: 'Dashboard', path: '/admin/dashboard', icon: <LayoutDashboard size={20} /> },
     { name: 'Pesanan', path: '/admin/orders', icon: <ClipboardList size={20} /> },
     { name: 'Produk', path: '/admin/products', icon: <ShoppingBag size={20} /> },
+    { name: 'Voucher', path: '/admin/vouchers', icon: <Ticket size={20} /> },
     { name: 'Affiliate', path: '/admin/affiliates', icon: <Users size={20} /> },
     { name: 'Pengaturan', path: '/admin/settings', icon: <Settings size={20} /> },
   ];
