@@ -18,6 +18,16 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
   const navigate = useNavigate();
   const supabase = getSupabase();
 
+  // TRACK AFFILIATE REFERRAL CODE
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const refCode = params.get('ref');
+    if (refCode) {
+      // Simpan kode referral ke browser agar tidak hilang saat pindah halaman
+      localStorage.setItem('digitalstore_referral', refCode.toUpperCase());
+    }
+  }, [location]);
+
   const handleLogout = async () => {
     if (supabase) {
       await (supabase.auth as any).signOut();

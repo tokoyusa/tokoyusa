@@ -115,6 +115,17 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     let userId = user?.id;
     let userReferral = user?.referred_by;
 
+    // CHECK LOCAL STORAGE FOR REFERRAL (If user doesn't have one)
+    if (!userReferral) {
+        const localRef = localStorage.getItem('digitalstore_referral');
+        if (localRef) {
+             // Prevent self-referral
+             if (!user?.affiliate_code || user.affiliate_code !== localRef) {
+                 userReferral = localRef;
+             }
+        }
+    }
+
     try {
         // 1. AUTO-REGISTER logic if user is not logged in
         if (!userId) {
@@ -137,19 +148,25 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                 userId = authData.user.id;
                 
                 // Create Profile for new user
-                const { error: profileError } = await supabase.from('profiles').insert({
+                const profilePayload: any = {
                     id: userId,
                     email: guestData.email,
                     full_name: guestData.fullName,
                     role: 'user'
-                });
+                };
+                
+                // Save referral code to profile if exists
+                if (userReferral) {
+                    profilePayload.referred_by = userReferral;
+                }
+
+                const { error: profileError } = await supabase.from('profiles').insert(profilePayload);
                 
                 if (profileError) {
-                   // If profile exists (rare race condition), ignore
                    if (!profileError.message.includes('duplicate')) throw profileError;
                 }
 
-                // Auto Login (SignIn) to set session immediately
+                // Auto Login
                 await (supabase.auth as any).signInWithPassword({
                     email: guestData.email,
                     password: guestData.password
@@ -186,6 +203,9 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
         setOrderSuccess(order.id);
         clearCart();
         
+        // Clear local storage referral if used
+        localStorage.removeItem('digitalstore_referral');
+        
     } catch (err: any) {
         console.error(err);
         alert("Terjadi kesalahan: " + err.message);
@@ -214,7 +234,6 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
               <p className="text-2xl font-bold text-white">{formatRupiah(lastOrderTotal)}</p>
            </div>
            
-           {/* Payment Instructions Display (Same as before) */}
            {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
              <div className="space-y-4">
                 <p className="text-sm text-slate-400">Silakan transfer ke salah satu rekening berikut:</p>

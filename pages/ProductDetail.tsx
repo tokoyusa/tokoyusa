@@ -2,18 +2,20 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getSupabase } from '../services/supabase';
-import { Product } from '../types';
+import { Product, UserProfile } from '../types';
 import { formatRupiah } from '../services/helpers';
-import { ShoppingCart, ArrowLeft, Share2 } from 'lucide-react';
+import { ShoppingCart, ArrowLeft, Share2, Link as LinkIcon, Check } from 'lucide-react';
 
 interface ProductDetailProps {
   addToCart: (product: Product) => void;
+  user: UserProfile | null;
 }
 
-const ProductDetail: React.FC<ProductDetailProps> = ({ addToCart }) => {
+const ProductDetail: React.FC<ProductDetailProps> = ({ addToCart, user }) => {
   const { id } = useParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,6 +34,26 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ addToCart }) => {
     };
     fetchProduct();
   }, [id]);
+
+  const handleShare = () => {
+     // Default share (just URL)
+     navigator.share({ title: product?.name, url: window.location.href }).catch(()=> {
+         navigator.clipboard.writeText(window.location.href);
+         alert("Link produk disalin!");
+     });
+  };
+
+  const handleAffiliateShare = () => {
+     if (!user?.affiliate_code || !product) return;
+     
+     // Construct URL with ?ref=CODE
+     const currentUrl = window.location.href.split('?')[0];
+     const affiliateUrl = `${currentUrl}?ref=${user.affiliate_code}`;
+     
+     navigator.clipboard.writeText(affiliateUrl);
+     setCopied(true);
+     setTimeout(() => setCopied(false), 2000);
+  };
 
   if (loading) return <div className="p-8 text-center text-slate-400">Loading...</div>;
   if (!product) return <div className="p-8 text-center text-slate-400">Produk tidak ditemukan</div>;
@@ -75,23 +97,40 @@ const ProductDetail: React.FC<ProductDetailProps> = ({ addToCart }) => {
               )}
             </div>
             
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-3">
               <button 
                 onClick={() => addToCart(product)}
-                className="flex-1 bg-primary hover:bg-blue-600 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
+                className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-colors"
               >
                 <ShoppingCart size={20} />
                 Beli Sekarang
               </button>
-              <button 
-                 onClick={() => {
-                   navigator.share({ title: product.name, url: window.location.href }).catch(()=> alert('Link disalin: ' + window.location.href));
-                 }}
-                 className="px-4 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center justify-center transition-colors"
-                 title="Bagikan"
-              >
-                <Share2 size={20} />
-              </button>
+              
+              <div className="flex gap-2">
+                 {/* Standard Share */}
+                 <button 
+                    onClick={handleShare}
+                    className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
+                 >
+                   <Share2 size={16} /> Share
+                 </button>
+
+                 {/* Affiliate Share (Only visible if user has code) */}
+                 {user?.affiliate_code && (
+                    <button 
+                       onClick={handleAffiliateShare}
+                       className="flex-[2] px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center justify-center gap-2 transition-colors text-sm font-bold"
+                    >
+                       {copied ? <Check size={16} /> : <LinkIcon size={16} />}
+                       {copied ? 'Tersalin' : 'Salin Link Affiliate'}
+                    </button>
+                 )}
+              </div>
+              {user?.affiliate_code && (
+                  <p className="text-[10px] text-green-400 text-center">
+                     Bagikan link affiliate untuk mendapatkan komisi.
+                  </p>
+              )}
             </div>
           </div>
         </div>

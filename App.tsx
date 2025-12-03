@@ -187,7 +187,7 @@ const App: React.FC = () => {
           
           <Route 
             path="/product/:id" 
-            element={<ProductDetail addToCart={addToCart} />} 
+            element={<ProductDetail addToCart={addToCart} user={user} />} 
           />
           
           <Route 
