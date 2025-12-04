@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { CartItem, UserProfile, StoreSettings, Voucher } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, LogIn, UserPlus, Lock, Mail, User, ExternalLink } from 'lucide-react';
+import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, UserPlus, Lock, Mail, User, ExternalLink } from 'lucide-react';
 import { getSupabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 
@@ -38,18 +38,24 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   const navigate = useNavigate();
   const supabase = getSupabase();
 
-  // Basic total from items
-  const subtotal = cart.reduce((acc, item) => acc + (item.discount_price || item.price) * item.quantity, 0);
+  // Basic total from items (Ensure numbers)
+  const subtotal = cart.reduce((acc, item) => {
+      const price = item.discount_price ? Number(item.discount_price) : Number(item.price);
+      return acc + (price * item.quantity);
+  }, 0);
 
   // Calculate discount
   let discountAmount = 0;
   if (appliedVoucher) {
+     const val = Number(appliedVoucher.discount_value);
      if (appliedVoucher.discount_type === 'percentage') {
-        discountAmount = Math.floor(subtotal * (appliedVoucher.discount_value / 100));
+        discountAmount = Math.floor(subtotal * (val / 100));
      } else {
-        discountAmount = appliedVoucher.discount_value;
+        discountAmount = val;
      }
   }
+  
+  // Prevent negative total
   if (discountAmount > subtotal) discountAmount = subtotal;
 
   const finalTotal = subtotal - discountAmount;
@@ -63,15 +69,18 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     if (!supabase) { setCheckingVoucher(false); return; }
 
     try {
+      // Fetch voucher strictly
+      const codeToSearch = voucherCode.trim().toUpperCase();
+      
       const { data, error } = await supabase
          .from('vouchers')
          .select('*')
-         .eq('code', voucherCode.toUpperCase().trim())
+         .eq('code', codeToSearch)
          .eq('is_active', true)
          .single();
       
       if (error || !data) {
-         setVoucherError('Voucher tidak valid.');
+         setVoucherError('Voucher tidak valid atau sudah tidak aktif.');
       } else {
          setAppliedVoucher(data as Voucher);
       }
@@ -145,6 +154,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                 const { error: profileError } = await supabase.from('profiles').insert(profilePayload);
                 
                 if (profileError) {
+                   // Ignore duplicate key error (if user recreated profile quickly)
                    if (!profileError.message.includes('duplicate')) throw profileError;
                 }
 
@@ -396,6 +406,9 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                                     value={guestData.password}
                                     onChange={e => setGuestData({...guestData, password: e.target.value})}
                                 />
+                            </div>
+                            <div className="text-xs text-slate-500 mt-2 text-center">
+                                Sudah punya akun? <span className="text-primary cursor-pointer hover:underline" onClick={() => navigate('/login')}>Login di sini</span>
                             </div>
                         </div>
                     </div>
