@@ -21,9 +21,11 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   const [selectedProvider, setSelectedProvider] = useState<string>(''); // For specific bank/wallet selection
   const [processing, setProcessing] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
+  
+  // State to remember order details for WhatsApp
   const [lastOrderTotal, setLastOrderTotal] = useState(0); 
-  const [lastOrderItems, setLastOrderItems] = useState<CartItem[]>([]); // To remember items for WA message
-  const [lastOrderMethod, setLastOrderMethod] = useState(''); // Store final method string
+  const [lastOrderItems, setLastOrderItems] = useState<CartItem[]>([]); 
+  const [lastOrderMethod, setLastOrderMethod] = useState(''); 
   
   // Voucher States
   const [voucherCode, setVoucherCode] = useState('');
@@ -185,7 +187,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
         }
 
         // Construct detailed payment method string for database
-        let detailedMethod = selectedMethod;
+        let detailedMethod: string = selectedMethod;
         if (selectedProvider) {
             detailedMethod = `${selectedMethod} - ${selectedProvider}`;
         }
@@ -209,11 +211,12 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
         if (error || !order) throw error;
         
-        // Save State for Success Screen
+        // Save State for Success Screen BEFORE clearing cart
         setLastOrderTotal(finalTotal);
         setLastOrderItems([...cart]); 
-        setLastOrderMethod(detailedMethod); // NEW: Store specific method
+        setLastOrderMethod(detailedMethod);
         setOrderSuccess(order.id);
+        
         clearCart();
         
         // Clear local storage referral if used
@@ -230,11 +233,11 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   const handleConfirmWA = () => {
     if (!orderSuccess) return;
     
-    // Construct Product List String
-    const productList = lastOrderItems.map(item => `- ${item.name} (x${item.quantity})`).join('\n');
+    // Construct Product List String with numbering
+    const productList = lastOrderItems.map((item, index) => `${index + 1}. ${item.name} (${item.quantity}x)`).join('\n');
     
     // Construct Message
-    const msg = `Halo Admin, saya sudah melakukan pesanan.\n\nID Pesanan: ${orderSuccess.slice(0, 8)}\n\n*Detail Pesanan:*\n${productList}\n\n*Total Bayar:* ${formatRupiah(lastOrderTotal)}\n*Metode Pembayaran:* ${lastOrderMethod}\n\nMohon segera diproses.`;
+    const msg = `Halo Admin, saya ada pesanan baru di Website.\n\n*ID Pesanan:* #${orderSuccess.slice(0, 8)}\n\n*Detail Produk:* \n${productList}\n\n*Total Bayar:* ${formatRupiah(lastOrderTotal)}\n*Metode Pembayaran:* ${lastOrderMethod}\n\nMohon dicek dan diproses. Terima kasih.`;
     
     window.open(generateWhatsAppLink(settings.whatsapp_number, msg), '_blank');
   };
@@ -242,7 +245,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   if (orderSuccess) {
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-        <CheckCircle className="text-green-500 w-20 h-20 mb-6" />
+        <CheckCircle className="text-green-500 w-20 h-20 mb-6 animate-in zoom-in" />
         <h2 className="text-3xl font-bold text-white mb-2">Pesanan Berhasil!</h2>
         <p className="text-slate-400 mb-6">ID Pesanan: #{orderSuccess.slice(0, 8)}</p>
         
@@ -324,7 +327,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                 <Smartphone size={20} /> Konfirmasi Pembayaran ke WA
              </button>
              <p className="text-xs text-center text-slate-500 mt-3">
-                Klik tombol di atas untuk mengirim bukti pembayaran ke Admin.
+                Wajib kirim bukti transfer agar pesanan diproses.
              </p>
            </div>
         </div>

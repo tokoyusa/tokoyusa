@@ -61,17 +61,17 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans pb-16 md:pb-0">
       {/* Top Navbar */}
-      <nav className="fixed top-0 w-full z-50 bg-slate-900/95 border-b border-slate-800 backdrop-blur">
+      <nav className="fixed top-0 w-full z-50 bg-slate-900/95 border-b border-slate-800 backdrop-blur shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              {/* Mobile Menu Toggle - Made more prominent */}
+              {/* Mobile Menu Toggle - Force Visible */}
               <button 
                 onClick={() => setIsSidebarOpen(true)}
-                className="md:hidden text-white p-2 mr-1 hover:bg-slate-800 rounded-lg transition-colors"
+                className="md:hidden flex items-center justify-center text-white bg-slate-800 p-2 rounded-lg hover:bg-slate-700 active:bg-slate-600 transition-colors border border-slate-700"
                 aria-label="Buka Menu"
               >
-                <Menu size={28} />
+                <Menu size={24} />
               </button>
 
               <Link to="/" className="text-xl font-bold text-primary flex items-center gap-2">
@@ -142,10 +142,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
             
             {/* Mobile Cart Icon (Right Side) */}
              <div className="md:hidden flex items-center">
-                 <Link to="/cart" className="relative p-2 text-slate-300">
+                 <Link to="/cart" className="relative p-2 text-slate-300 hover:text-white transition-colors">
                     <ShoppingBag size={24} />
                     {cartCount > 0 && (
-                      <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold border-2 border-slate-900">
                         {cartCount}
                       </span>
                     )}
@@ -156,8 +156,10 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
       </nav>
 
       {/* MOBILE SIDEBAR (DRAWER) */}
-      {isSidebarOpen && (
-        <div className="fixed inset-0 z-[60] flex md:hidden">
+      {/* Increased Z-Index to ensure it's on top of everything */}
+      <div 
+        className={`fixed inset-0 z-[100] flex md:hidden transition-opacity duration-300 ${isSidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+      >
            {/* Overlay */}
            <div 
              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
@@ -165,12 +167,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
            ></div>
            
            {/* Sidebar Content */}
-           <div className="relative bg-slate-900 w-3/4 max-w-xs h-full shadow-2xl flex flex-col border-r border-slate-800">
+           <div className={`relative bg-slate-900 w-4/5 max-w-xs h-full shadow-2xl flex flex-col border-r border-slate-800 transition-transform duration-300 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
               <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
                  <span className="font-bold text-xl text-white flex items-center gap-2">
                     <ShoppingBag className="text-primary" size={20} /> Menu
                  </span>
-                 <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-full">
+                 <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-2 rounded-full">
                     <X size={20} />
                  </button>
               </div>
@@ -237,8 +239,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
                  )}
               </div>
            </div>
-        </div>
-      )}
+      </div>
 
       {/* Main Content */}
       <main className="pt-20 px-4 max-w-7xl mx-auto min-h-[85vh]">
@@ -246,7 +247,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
       </main>
 
       {/* Mobile Bottom Navigation (Fixed) */}
-      <div className="md:hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-800 z-40 pb-safe safe-area-bottom shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)]">
+      <div className="md:hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-800 z-40 pb-safe safe-area-bottom shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.5)]">
         <div className="grid grid-cols-4 h-16">
           {navLinks.map((link) => (
             <Link
@@ -257,7 +258,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
               <div className="relative">
                 {link.icon}
                 {link.badge ? (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[1.2rem] h-[1.2rem] font-bold shadow-sm">
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[1.2rem] h-[1.2rem] font-bold shadow-sm border border-slate-900">
                     {link.badge}
                   </span>
                 ) : null}
