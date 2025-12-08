@@ -65,12 +65,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
-              {/* Mobile Menu Toggle */}
+              {/* Mobile Menu Toggle - Made more prominent */}
               <button 
                 onClick={() => setIsSidebarOpen(true)}
-                className="md:hidden text-slate-300 hover:text-white p-1"
+                className="md:hidden text-white p-2 mr-1 hover:bg-slate-800 rounded-lg transition-colors"
+                aria-label="Buka Menu"
               >
-                <Menu size={24} />
+                <Menu size={28} />
               </button>
 
               <Link to="/" className="text-xl font-bold text-primary flex items-center gap-2">
@@ -165,10 +166,12 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
            
            {/* Sidebar Content */}
            <div className="relative bg-slate-900 w-3/4 max-w-xs h-full shadow-2xl flex flex-col border-r border-slate-800">
-              <div className="p-4 border-b border-slate-800 flex justify-between items-center">
-                 <span className="font-bold text-xl text-white">Menu</span>
-                 <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-white">
-                    <X size={24} />
+              <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                 <span className="font-bold text-xl text-white flex items-center gap-2">
+                    <ShoppingBag className="text-primary" size={20} /> Menu
+                 </span>
+                 <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-white bg-slate-800 p-1 rounded-full">
+                    <X size={20} />
                  </button>
               </div>
 
@@ -180,6 +183,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
                       <Link
                         key={link.path}
                         to={link.path}
+                        onClick={() => setIsSidebarOpen(false)}
                         className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium ${location.pathname === link.path ? 'bg-primary/10 text-primary' : 'text-slate-300 hover:bg-slate-800'}`}
                       >
                         <div className="flex items-center gap-3">
@@ -199,6 +203,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
                         <Link
                           key={link.path}
                           to={link.path}
+                          onClick={() => setIsSidebarOpen(false)}
                           className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium ${location.pathname === link.path ? 'bg-slate-800 text-accent' : 'text-slate-300 hover:bg-slate-800'}`}
                         >
                            <div className="flex items-center gap-3">
@@ -217,14 +222,15 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
                  {user ? (
                    <button 
                      onClick={handleLogout}
-                     className="w-full flex items-center justify-center gap-2 bg-red-600/10 text-red-500 py-2 rounded-lg hover:bg-red-600 hover:text-white transition-colors"
+                     className="w-full flex items-center justify-center gap-2 bg-red-600/10 text-red-500 py-3 rounded-lg hover:bg-red-600 hover:text-white transition-colors font-semibold"
                    >
                       <LogOut size={18} /> Logout
                    </button>
                  ) : (
                    <Link 
                      to="/login"
-                     className="w-full flex items-center justify-center gap-2 bg-primary text-white py-2 rounded-lg"
+                     onClick={() => setIsSidebarOpen(false)}
+                     className="w-full flex items-center justify-center gap-2 bg-primary text-white py-3 rounded-lg font-bold"
                    >
                      <LogIn size={18} /> Login / Daftar
                    </Link>
@@ -240,23 +246,23 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
       </main>
 
       {/* Mobile Bottom Navigation (Fixed) */}
-      <div className="md:hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-800 z-40 pb-safe safe-area-bottom">
+      <div className="md:hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-800 z-40 pb-safe safe-area-bottom shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.3)]">
         <div className="grid grid-cols-4 h-16">
           {navLinks.map((link) => (
             <Link
               key={link.path}
               to={link.path}
-              className={`flex flex-col items-center justify-center space-y-1 ${location.pathname === link.path ? 'text-primary' : 'text-slate-400'}`}
+              className={`flex flex-col items-center justify-center space-y-1 ${location.pathname === link.path ? 'text-primary' : 'text-slate-400 hover:text-slate-200'}`}
             >
               <div className="relative">
                 {link.icon}
                 {link.badge ? (
-                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full flex items-center justify-center">
+                  <span className="absolute -top-2 -right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full flex items-center justify-center min-w-[1.2rem] h-[1.2rem] font-bold shadow-sm">
                     {link.badge}
                   </span>
                 ) : null}
               </div>
-              <span className="text-[10px]">{link.name === 'Akun' && !user ? 'Login' : link.name}</span>
+              <span className="text-[10px] font-medium">{link.name === 'Akun' && !user ? 'Login' : link.name}</span>
             </Link>
           ))}
         </div>

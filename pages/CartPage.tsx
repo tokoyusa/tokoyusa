@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { CartItem, UserProfile, StoreSettings, Voucher } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, UserPlus, Lock, Mail, User, ExternalLink } from 'lucide-react';
+import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, UserPlus, Lock, Mail, User, ExternalLink, ShoppingBag } from 'lucide-react';
 import { getSupabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 
@@ -23,6 +23,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const [lastOrderTotal, setLastOrderTotal] = useState(0); 
   const [lastOrderItems, setLastOrderItems] = useState<CartItem[]>([]); // To remember items for WA message
+  const [lastOrderMethod, setLastOrderMethod] = useState(''); // Store final method string
   
   // Voucher States
   const [voucherCode, setVoucherCode] = useState('');
@@ -208,8 +209,10 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
         if (error || !order) throw error;
         
+        // Save State for Success Screen
         setLastOrderTotal(finalTotal);
-        setLastOrderItems([...cart]); // Store items for WA message
+        setLastOrderItems([...cart]); 
+        setLastOrderMethod(detailedMethod); // NEW: Store specific method
         setOrderSuccess(order.id);
         clearCart();
         
@@ -230,40 +233,39 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     // Construct Product List String
     const productList = lastOrderItems.map(item => `- ${item.name} (x${item.quantity})`).join('\n');
     
-    // Construct Method String
-    let methodString = selectedMethod;
-    if (selectedProvider) {
-        methodString = `${selectedMethod} - ${selectedProvider}`;
-    }
-
-    const msg = `Halo Admin, saya sudah melakukan pesanan.\n\nID Pesanan: ${orderSuccess.slice(0, 8)}\n\nProduk:\n${productList}\n\nTotal: ${formatRupiah(lastOrderTotal)}\nMetode Pembayaran: ${methodString}\n\nMohon segera diproses.`;
+    // Construct Message
+    const msg = `Halo Admin, saya sudah melakukan pesanan.\n\nID Pesanan: ${orderSuccess.slice(0, 8)}\n\n*Detail Pesanan:*\n${productList}\n\n*Total Bayar:* ${formatRupiah(lastOrderTotal)}\n*Metode Pembayaran:* ${lastOrderMethod}\n\nMohon segera diproses.`;
     
     window.open(generateWhatsAppLink(settings.whatsapp_number, msg), '_blank');
   };
 
   if (orderSuccess) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
+      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
         <CheckCircle className="text-green-500 w-20 h-20 mb-6" />
         <h2 className="text-3xl font-bold text-white mb-2">Pesanan Berhasil!</h2>
         <p className="text-slate-400 mb-6">ID Pesanan: #{orderSuccess.slice(0, 8)}</p>
         
-        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 max-w-md w-full mb-6 text-left">
+        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 max-w-md w-full mb-6 text-left shadow-lg">
            <h3 className="font-bold text-lg mb-4 border-b border-slate-700 pb-2">Instruksi Pembayaran</h3>
            <div className="mb-4 text-center">
               <span className="text-slate-400">Total yang harus dibayar:</span>
-              <p className="text-2xl font-bold text-white">{formatRupiah(lastOrderTotal)}</p>
+              <p className="text-3xl font-bold text-white text-primary mt-1">{formatRupiah(lastOrderTotal)}</p>
            </div>
            
+           {/* Detailed Payment Instructions */}
            {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
              <div className="space-y-4">
-                <p className="text-sm text-slate-400">Silakan transfer ke rekening berikut:</p>
+                <p className="text-sm text-slate-400 font-medium bg-slate-900/50 p-2 rounded">Silakan transfer ke rekening berikut:</p>
                 {/* Show only selected bank if available, else show all */}
                 {settings.bank_accounts.filter(b => !selectedProvider || b.bank === selectedProvider).map((acc, idx) => (
-                  <div key={idx} className="bg-slate-900 p-3 rounded border border-primary/30">
-                    <p className="font-bold text-primary">{acc.bank}</p>
-                    <p className="text-lg font-mono">{acc.number}</p>
-                    <p className="text-sm text-slate-500">a.n {acc.name}</p>
+                  <div key={idx} className="bg-slate-900 p-4 rounded border border-primary/30 relative">
+                    <p className="font-bold text-primary text-lg">{acc.bank}</p>
+                    <div className="flex items-center justify-between mt-1">
+                        <p className="text-xl font-mono tracking-wide">{acc.number}</p>
+                        <button onClick={() => {navigator.clipboard.writeText(acc.number); alert('Disalin!')}} className="text-xs bg-slate-800 p-1 rounded hover:text-white text-slate-400">Salin</button>
+                    </div>
+                    <p className="text-sm text-slate-500 mt-1">a.n {acc.name}</p>
                   </div>
                 ))}
              </div>
@@ -271,12 +273,15 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
            {selectedMethod === 'EWALLET' && (
              <div className="space-y-4">
-                <p className="text-sm text-slate-400">Silakan transfer saldo ke:</p>
+                <p className="text-sm text-slate-400 font-medium bg-slate-900/50 p-2 rounded">Silakan transfer saldo ke:</p>
                 {settings.e_wallets?.filter(w => !selectedProvider || w.provider === selectedProvider).map((wallet, idx) => (
-                    <div key={idx} className="bg-slate-900 p-3 rounded border border-primary/30">
-                        <p className="font-bold text-primary">{wallet.provider}</p>
-                        <p className="text-lg font-mono">{wallet.number}</p>
-                        <p className="text-sm text-slate-500">a.n {wallet.name}</p>
+                    <div key={idx} className="bg-slate-900 p-4 rounded border border-primary/30 relative">
+                        <p className="font-bold text-primary text-lg">{wallet.provider}</p>
+                        <div className="flex items-center justify-between mt-1">
+                            <p className="text-xl font-mono tracking-wide">{wallet.number}</p>
+                            <button onClick={() => {navigator.clipboard.writeText(wallet.number); alert('Disalin!')}} className="text-xs bg-slate-800 p-1 rounded hover:text-white text-slate-400">Salin</button>
+                        </div>
+                        <p className="text-sm text-slate-500 mt-1">a.n {wallet.name}</p>
                     </div>
                 ))}
              </div>
@@ -284,7 +289,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
            {selectedMethod === 'QRIS' && (
              <div className="space-y-4 flex flex-col items-center w-full">
-                <p className="text-sm text-slate-400">Scan QRIS untuk membayar:</p>
+                <p className="text-sm text-slate-400 font-medium w-full text-center bg-slate-900/50 p-2 rounded">Scan QRIS untuk membayar:</p>
                 {settings.qris_url ? (
                   <div className="flex flex-col items-center w-full">
                       <div className="bg-white p-4 rounded-xl inline-block w-full max-w-[300px] shadow-lg flex items-center justify-center min-h-[250px]">
@@ -314,15 +319,18 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
              </div>
            )}
            
-           <div className="mt-6 pt-4 border-t border-slate-700">
-             <button onClick={handleConfirmWA} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 rounded flex items-center justify-center gap-2">
-                <Smartphone size={18} /> Konfirmasi WhatsApp
+           <div className="mt-8 pt-6 border-t border-slate-700">
+             <button onClick={handleConfirmWA} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 transition-all hover:scale-[1.02]">
+                <Smartphone size={20} /> Konfirmasi Pembayaran ke WA
              </button>
+             <p className="text-xs text-center text-slate-500 mt-3">
+                Klik tombol di atas untuk mengirim bukti pembayaran ke Admin.
+             </p>
            </div>
         </div>
         
-        <button onClick={() => { window.location.href = '#/profile'; window.location.reload(); }} className="text-primary hover:underline">
-           Lihat Akun Baru Saya
+        <button onClick={() => { window.location.href = '#/profile'; window.location.reload(); }} className="text-primary hover:underline font-medium">
+           Lihat Akun & Pesanan Saya
         </button>
       </div>
     );
@@ -330,25 +338,27 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
   return (
     <div className="py-8">
-      <h1 className="text-2xl font-bold mb-6">Keranjang Belanja</h1>
+      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2"><CreditCard className="text-primary"/> Keranjang Belanja</h1>
       
       {cart.length === 0 ? (
         <div className="text-center py-12 bg-slate-800 rounded-xl border border-slate-700">
-          <p className="text-slate-400 mb-4">Keranjang Anda kosong</p>
-          <button onClick={() => navigate('/')} className="text-primary hover:underline">Mulai Belanja</button>
+          <ShoppingBag size={48} className="mx-auto text-slate-600 mb-4" />
+          <p className="text-slate-400 mb-4 text-lg">Keranjang Anda masih kosong</p>
+          <button onClick={() => navigate('/')} className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-full font-bold transition-colors">Mulai Belanja</button>
         </div>
       ) : (
         <div className="grid md:grid-cols-3 gap-8">
           {/* Items List */}
           <div className="md:col-span-2 space-y-4">
             {cart.map(item => (
-              <div key={item.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex gap-4 items-center">
-                 <img src={item.image_url || 'https://via.placeholder.com/100'} alt={item.name} className="w-16 h-16 rounded object-cover" />
+              <div key={item.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex gap-4 items-center shadow-sm">
+                 <img src={item.image_url || 'https://via.placeholder.com/100'} alt={item.name} className="w-20 h-20 rounded-lg object-cover bg-slate-700" />
                  <div className="flex-1">
-                   <h3 className="font-bold text-slate-200">{item.name}</h3>
-                   <p className="text-primary font-medium">{formatRupiah(item.discount_price || item.price)}</p>
+                   <h3 className="font-bold text-slate-200 text-lg">{item.name}</h3>
+                   <span className="text-xs text-slate-500 uppercase">{item.category}</span>
+                   <p className="text-primary font-bold mt-1">{formatRupiah(item.discount_price || item.price)}</p>
                  </div>
-                 <button onClick={() => removeFromCart(item.id)} className="text-red-500 p-2 hover:bg-slate-700 rounded-full">
+                 <button onClick={() => removeFromCart(item.id)} className="text-slate-400 hover:text-red-500 p-2 hover:bg-slate-700 rounded-full transition-colors">
                    <Trash2 size={20} />
                  </button>
               </div>
@@ -357,50 +367,51 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
           {/* Checkout Form */}
           <div className="md:col-span-1">
-             <form onSubmit={handleCheckout} className="bg-slate-800 p-6 rounded-xl border border-slate-700 sticky top-24">
-                <h3 className="text-xl font-bold mb-4">Ringkasan</h3>
+             <form onSubmit={handleCheckout} className="bg-slate-800 p-6 rounded-xl border border-slate-700 sticky top-24 shadow-xl">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Wallet size={20}/> Ringkasan</h3>
                 
                 {/* Voucher Input */}
                 <div className="mb-6 border-b border-slate-700 pb-6">
-                   <label className="text-sm text-slate-400 mb-1 flex items-center gap-1"><Ticket size={14}/> Kode Voucher</label>
+                   <label className="text-sm text-slate-400 mb-2 flex items-center gap-1 font-medium"><Ticket size={14}/> Kode Voucher</label>
                    {appliedVoucher ? (
-                     <div className="flex justify-between items-center bg-green-500/10 border border-green-500/20 p-2 rounded text-green-400 text-sm">
-                        <span>{appliedVoucher.code}</span>
-                        <button type="button" onClick={removeVoucher}><X size={16} /></button>
+                     <div className="flex justify-between items-center bg-green-500/10 border border-green-500/20 p-3 rounded-lg text-green-400 text-sm">
+                        <span className="font-mono font-bold">{appliedVoucher.code}</span>
+                        <button type="button" onClick={removeVoucher} className="hover:text-white"><X size={16} /></button>
                      </div>
                    ) : (
                       <div className="flex gap-2">
                         <input 
                           type="text" 
                           placeholder="Masukkan kode..." 
-                          className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-sm uppercase outline-none"
+                          className="flex-1 bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-sm uppercase outline-none focus:border-primary transition-colors"
                           value={voucherCode}
                           onChange={e => setVoucherCode(e.target.value)}
                         />
-                        <button type="button" onClick={handleApplyVoucher} disabled={checkingVoucher} className="bg-slate-700 px-3 py-2 rounded text-sm">
+                        <button type="button" onClick={handleApplyVoucher} disabled={checkingVoucher} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
                            {checkingVoucher ? <Loader2 size={16} className="animate-spin" /> : 'Cek'}
                         </button>
                       </div>
                    )}
-                   {voucherError && <p className="text-red-500 text-xs mt-1">{voucherError}</p>}
+                   {voucherError && <p className="text-red-500 text-xs mt-2 flex items-center gap-1"><X size={12}/> {voucherError}</p>}
                 </div>
 
                 {/* Total Calculation */}
-                <div className="space-y-2 mb-4 text-slate-300">
-                   <div className="flex justify-between"><span>Subtotal</span><span>{formatRupiah(subtotal)}</span></div>
+                <div className="space-y-2 mb-4 text-slate-300 text-sm">
+                   <div className="flex justify-between"><span>Subtotal ({cart.length} item)</span><span>{formatRupiah(subtotal)}</span></div>
                    {appliedVoucher && (
-                     <div className="flex justify-between text-green-400"><span>Diskon</span><span>- {formatRupiah(discountAmount)}</span></div>
+                     <div className="flex justify-between text-green-400"><span>Diskon Voucher</span><span>- {formatRupiah(discountAmount)}</span></div>
                    )}
                 </div>
-                <div className="flex justify-between mb-6 text-xl font-bold text-white border-t border-slate-700 pt-2">
-                  <span>Total Bayar</span><span>{formatRupiah(finalTotal)}</span>
+                <div className="flex justify-between mb-6 text-xl font-bold text-white border-t border-slate-700 pt-4">
+                  <span>Total Bayar</span><span className="text-primary">{formatRupiah(finalTotal)}</span>
                 </div>
 
                 {/* AUTO REGISTER FORM IF NOT LOGGED IN */}
                 {!user && (
-                    <div className="bg-slate-900 p-4 rounded-lg mb-6 border border-slate-700">
-                        <div className="flex items-center gap-2 mb-3 text-primary font-bold text-sm">
-                            <UserPlus size={16} /> Daftar Member Otomatis
+                    <div className="bg-slate-900 p-4 rounded-xl mb-6 border border-slate-700 relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
+                        <div className="flex items-center gap-2 mb-4 text-white font-bold text-sm">
+                            <UserPlus size={18} className="text-primary" /> Data Pemesan (Auto-Daftar)
                         </div>
                         <div className="space-y-3">
                             <div className="relative">
@@ -409,7 +420,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                                     required 
                                     type="text" 
                                     placeholder="Nama Lengkap" 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 pl-9 text-sm focus:border-primary outline-none"
+                                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 pl-10 text-sm focus:border-primary outline-none focus:bg-slate-800 transition-colors"
                                     value={guestData.fullName}
                                     onChange={e => setGuestData({...guestData, fullName: e.target.value})}
                                 />
@@ -419,8 +430,8 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                                 <input 
                                     required 
                                     type="email" 
-                                    placeholder="Email Aktif" 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 pl-9 text-sm focus:border-primary outline-none"
+                                    placeholder="Email Aktif (Untuk login)" 
+                                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 pl-10 text-sm focus:border-primary outline-none focus:bg-slate-800 transition-colors"
                                     value={guestData.email}
                                     onChange={e => setGuestData({...guestData, email: e.target.value})}
                                 />
@@ -431,13 +442,13 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                                     required 
                                     type="password" 
                                     placeholder="Buat Password" 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 pl-9 text-sm focus:border-primary outline-none"
+                                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 pl-10 text-sm focus:border-primary outline-none focus:bg-slate-800 transition-colors"
                                     value={guestData.password}
                                     onChange={e => setGuestData({...guestData, password: e.target.value})}
                                 />
                             </div>
                             <div className="text-xs text-slate-500 mt-2 text-center">
-                                Sudah punya akun? <span className="text-primary cursor-pointer hover:underline" onClick={() => navigate('/login')}>Login di sini</span>
+                                Sudah punya akun? <span className="text-primary cursor-pointer hover:underline font-bold" onClick={() => navigate('/login')}>Login di sini</span>
                             </div>
                         </div>
                     </div>
@@ -445,52 +456,75 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
                 {/* Payment Methods */}
                 <div className="space-y-3 mb-6">
-                    <p className="text-sm font-medium text-slate-400">Metode Pembayaran</p>
+                    <p className="text-sm font-bold text-white mb-2">Pilih Metode Pembayaran</p>
                     
                     {/* TRANSFER */}
-                    <button type="button" onClick={() => { setSelectedMethod('TRANSFER'); setSelectedProvider(''); }} className={`w-full flex items-center p-3 rounded-lg border ${selectedMethod === 'TRANSFER' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-600'}`}><CreditCard size={18} className="mr-3" /> Transfer Bank</button>
-                    
-                    {/* Provider Dropdown for Transfer */}
-                    {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
-                        <select 
-                            className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm mt-2 outline-none focus:border-primary"
-                            value={selectedProvider}
-                            onChange={(e) => setSelectedProvider(e.target.value)}
-                        >
-                            <option value="">-- Pilih Bank --</option>
-                            {settings.bank_accounts.map((acc, idx) => (
-                                <option key={idx} value={acc.bank}>{acc.bank} - {acc.number}</option>
-                            ))}
-                        </select>
-                    )}
+                    <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'TRANSFER' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
+                        <button type="button" onClick={() => { setSelectedMethod('TRANSFER'); setSelectedProvider(''); }} className="w-full flex items-center p-3 text-left">
+                            <CreditCard size={18} className={`mr-3 ${selectedMethod === 'TRANSFER' ? 'text-primary' : 'text-slate-400'}`} /> 
+                            <span className={selectedMethod === 'TRANSFER' ? 'text-primary font-bold' : 'text-slate-300'}>Transfer Bank</span>
+                        </button>
+                        
+                        {/* Provider Dropdown for Transfer */}
+                        {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
+                            <div className="px-3 pb-3 animate-in slide-in-from-top-2">
+                                <select 
+                                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm outline-none focus:border-primary text-slate-200"
+                                    value={selectedProvider}
+                                    onChange={(e) => setSelectedProvider(e.target.value)}
+                                >
+                                    <option value="">-- Pilih Bank --</option>
+                                    {settings.bank_accounts.map((acc, idx) => (
+                                        <option key={idx} value={acc.bank}>{acc.bank} - {acc.number}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
 
                     {/* E-WALLET */}
-                    <button type="button" onClick={() => { setSelectedMethod('EWALLET'); setSelectedProvider(''); }} className={`w-full flex items-center p-3 rounded-lg border ${selectedMethod === 'EWALLET' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-600'}`}><Wallet size={18} className="mr-3" /> E-Wallet</button>
-                    
-                    {/* Provider Dropdown for E-Wallet */}
-                    {selectedMethod === 'EWALLET' && settings.e_wallets?.length > 0 && (
-                         <select 
-                            className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm mt-2 outline-none focus:border-primary"
-                            value={selectedProvider}
-                            onChange={(e) => setSelectedProvider(e.target.value)}
-                        >
-                            <option value="">-- Pilih E-Wallet --</option>
-                            {settings.e_wallets.map((wallet, idx) => (
-                                <option key={idx} value={wallet.provider}>{wallet.provider} - {wallet.number}</option>
-                            ))}
-                        </select>
-                    )}
+                    <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'EWALLET' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
+                        <button type="button" onClick={() => { setSelectedMethod('EWALLET'); setSelectedProvider(''); }} className="w-full flex items-center p-3 text-left">
+                            <Wallet size={18} className={`mr-3 ${selectedMethod === 'EWALLET' ? 'text-primary' : 'text-slate-400'}`} /> 
+                            <span className={selectedMethod === 'EWALLET' ? 'text-primary font-bold' : 'text-slate-300'}>E-Wallet</span>
+                        </button>
+                        
+                        {/* Provider Dropdown for E-Wallet */}
+                        {selectedMethod === 'EWALLET' && settings.e_wallets?.length > 0 && (
+                            <div className="px-3 pb-3 animate-in slide-in-from-top-2">
+                                <select 
+                                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm outline-none focus:border-primary text-slate-200"
+                                    value={selectedProvider}
+                                    onChange={(e) => setSelectedProvider(e.target.value)}
+                                >
+                                    <option value="">-- Pilih E-Wallet --</option>
+                                    {settings.e_wallets.map((wallet, idx) => (
+                                        <option key={idx} value={wallet.provider}>{wallet.provider} - {wallet.number}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
+                    </div>
 
                     {/* QRIS */}
-                    <button type="button" onClick={() => { setSelectedMethod('QRIS'); setSelectedProvider('QRIS'); }} className={`w-full flex items-center p-3 rounded-lg border ${selectedMethod === 'QRIS' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-600'}`}><QrCode size={18} className="mr-3" /> QRIS</button>
+                    <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'QRIS' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
+                        <button type="button" onClick={() => { setSelectedMethod('QRIS'); setSelectedProvider('QRIS'); }} className="w-full flex items-center p-3 text-left">
+                            <QrCode size={18} className={`mr-3 ${selectedMethod === 'QRIS' ? 'text-primary' : 'text-slate-400'}`} /> 
+                            <span className={selectedMethod === 'QRIS' ? 'text-primary font-bold' : 'text-slate-300'}>QRIS (Scan)</span>
+                        </button>
+                    </div>
                 </div>
 
                 <button 
                   type="submit" 
                   disabled={processing}
-                  className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 rounded-lg transition-all shadow-lg hover:shadow-blue-500/25 flex items-center justify-center gap-2 transform active:scale-[0.98]"
                 >
-                  {processing ? 'Memproses...' : user ? 'Bayar Sekarang' : 'Daftar & Bayar'}
+                  {processing ? (
+                      <><Loader2 size={20} className="animate-spin" /> Memproses...</>
+                  ) : (
+                      user ? 'Bayar Sekarang' : 'Daftar & Bayar'
+                  )}
                 </button>
              </form>
           </div>
