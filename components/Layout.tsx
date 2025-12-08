@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, ShoppingBag, User, List, Settings, LogOut, Menu, X, BarChart, LayoutDashboard, Users, ClipboardList, Ticket, LogIn } from 'lucide-react';
+import { Home, ShoppingBag, User, List, Settings, LogOut, Menu, X, BarChart, LayoutDashboard, Users, ClipboardList, Ticket, LogIn, ChevronRight } from 'lucide-react';
 import { UserRole, UserProfile } from '../types';
 import { getSupabase } from '../services/supabase';
 
@@ -23,9 +23,13 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
     const params = new URLSearchParams(location.search);
     const refCode = params.get('ref');
     if (refCode) {
-      // Simpan kode referral ke browser agar tidak hilang saat pindah halaman
       localStorage.setItem('digitalstore_referral', refCode.toUpperCase());
     }
+  }, [location]);
+
+  // Close sidebar on route change
+  useEffect(() => {
+    setIsSidebarOpen(false);
   }, [location]);
 
   const handleLogout = async () => {
@@ -60,14 +64,23 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
       <nav className="fixed top-0 w-full z-50 bg-slate-900/95 border-b border-slate-800 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
+            <div className="flex items-center gap-3">
+              {/* Mobile Menu Toggle */}
+              <button 
+                onClick={() => setIsSidebarOpen(true)}
+                className="md:hidden text-slate-300 hover:text-white p-1"
+              >
+                <Menu size={24} />
+              </button>
+
               <Link to="/" className="text-xl font-bold text-primary flex items-center gap-2">
                 <ShoppingBag className="text-primary" />
                 <span className="hidden sm:inline">DigitalStorePro</span>
+                <span className="sm:hidden">Store</span>
               </Link>
             </div>
 
-            {/* Desktop Menu - Show to Everyone */}
+            {/* Desktop Menu */}
             <div className="hidden md:flex items-center space-x-4">
                 {navLinks.map((link) => (
                    link.name !== 'Kategori' && link.name !== 'Akun' && ( 
@@ -84,7 +97,6 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
                    )
                 ))}
                 
-                {/* Profile / Login Link */}
                 {user ? (
                    <Link
                       to="/profile"
@@ -101,7 +113,7 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
                     </Link>
                 )}
 
-                {/* Admin Links */}
+                {/* Desktop Admin Links */}
                 {isAdmin && (
                   <div className="flex items-center border-l border-slate-700 pl-4 space-x-2">
                     <span className="text-xs text-slate-500 font-bold px-2">ADMIN</span>
@@ -126,26 +138,109 @@ const Layout: React.FC<LayoutProps> = ({ children, user, setUser, cartCount }) =
                   </button>
                 )}
             </div>
-
-            {/* Mobile Admin Toggle (if admin) */}
-            {isAdmin && (
-              <div className="md:hidden flex items-center">
-                 <Link to="/admin/dashboard" className="text-accent bg-slate-800 p-2 rounded-full mr-2">
-                    <LayoutDashboard size={20} />
+            
+            {/* Mobile Cart Icon (Right Side) */}
+             <div className="md:hidden flex items-center">
+                 <Link to="/cart" className="relative p-2 text-slate-300">
+                    <ShoppingBag size={24} />
+                    {cartCount > 0 && (
+                      <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                        {cartCount}
+                      </span>
+                    )}
                  </Link>
-              </div>
-            )}
+             </div>
           </div>
         </div>
       </nav>
+
+      {/* MOBILE SIDEBAR (DRAWER) */}
+      {isSidebarOpen && (
+        <div className="fixed inset-0 z-[60] flex md:hidden">
+           {/* Overlay */}
+           <div 
+             className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+             onClick={() => setIsSidebarOpen(false)}
+           ></div>
+           
+           {/* Sidebar Content */}
+           <div className="relative bg-slate-900 w-3/4 max-w-xs h-full shadow-2xl flex flex-col border-r border-slate-800">
+              <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+                 <span className="font-bold text-xl text-white">Menu</span>
+                 <button onClick={() => setIsSidebarOpen(false)} className="text-slate-400 hover:text-white">
+                    <X size={24} />
+                 </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
+                 {/* Main Navigation */}
+                 <div className="mb-6">
+                    <p className="px-4 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Menu Utama</p>
+                    {navLinks.map((link) => (
+                      <Link
+                        key={link.path}
+                        to={link.path}
+                        className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium ${location.pathname === link.path ? 'bg-primary/10 text-primary' : 'text-slate-300 hover:bg-slate-800'}`}
+                      >
+                        <div className="flex items-center gap-3">
+                           {link.icon}
+                           {link.name}
+                        </div>
+                        <ChevronRight size={16} className="text-slate-600" />
+                      </Link>
+                    ))}
+                 </div>
+
+                 {/* Admin Navigation (Mobile) */}
+                 {isAdmin && (
+                   <div className="mb-6">
+                      <p className="px-4 text-xs font-bold text-accent uppercase tracking-wider mb-2">Administrator</p>
+                      {adminLinks.map((link) => (
+                        <Link
+                          key={link.path}
+                          to={link.path}
+                          className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium ${location.pathname === link.path ? 'bg-slate-800 text-accent' : 'text-slate-300 hover:bg-slate-800'}`}
+                        >
+                           <div className="flex items-center gap-3">
+                              {link.icon}
+                              {link.name}
+                           </div>
+                           <ChevronRight size={16} className="text-slate-600" />
+                        </Link>
+                      ))}
+                   </div>
+                 )}
+              </div>
+
+              {/* Sidebar Footer */}
+              <div className="p-4 border-t border-slate-800 bg-slate-950">
+                 {user ? (
+                   <button 
+                     onClick={handleLogout}
+                     className="w-full flex items-center justify-center gap-2 bg-red-600/10 text-red-500 py-2 rounded-lg hover:bg-red-600 hover:text-white transition-colors"
+                   >
+                      <LogOut size={18} /> Logout
+                   </button>
+                 ) : (
+                   <Link 
+                     to="/login"
+                     className="w-full flex items-center justify-center gap-2 bg-primary text-white py-2 rounded-lg"
+                   >
+                     <LogIn size={18} /> Login / Daftar
+                   </Link>
+                 )}
+              </div>
+           </div>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="pt-20 px-4 max-w-7xl mx-auto min-h-[85vh]">
         {children}
       </main>
 
-      {/* Mobile Bottom Navigation (Fixed) - Show to Everyone */}
-      <div className="md:hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-800 z-50 pb-safe safe-area-bottom">
+      {/* Mobile Bottom Navigation (Fixed) */}
+      <div className="md:hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-800 z-40 pb-safe safe-area-bottom">
         <div className="grid grid-cols-4 h-16">
           {navLinks.map((link) => (
             <Link

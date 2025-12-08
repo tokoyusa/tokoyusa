@@ -18,9 +18,11 @@ type PaymentMethod = 'TRANSFER' | 'EWALLET' | 'QRIS' | 'TRIPAY';
 
 const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, user, settings }) => {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('TRANSFER');
+  const [selectedProvider, setSelectedProvider] = useState<string>(''); // For specific bank/wallet selection
   const [processing, setProcessing] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   const [lastOrderTotal, setLastOrderTotal] = useState(0); 
+  const [lastOrderItems, setLastOrderItems] = useState<CartItem[]>([]); // To remember items for WA message
   
   // Voucher States
   const [voucherCode, setVoucherCode] = useState('');
@@ -102,6 +104,16 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     if (cart.length === 0) return;
     if (!supabase) return;
 
+    // Validation for specific provider
+    if (selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && !selectedProvider) {
+        alert("Silakan pilih Bank tujuan transfer.");
+        return;
+    }
+    if (selectedMethod === 'EWALLET' && settings.e_wallets.length > 0 && !selectedProvider) {
+        alert("Silakan pilih E-Wallet tujuan.");
+        return;
+    }
+
     setProcessing(true);
     let userId = user?.id;
     let userReferral = user?.referred_by;
@@ -171,6 +183,12 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
              await supabase.from('profiles').update({ referred_by: userReferral }).eq('id', userId);
         }
 
+        // Construct detailed payment method string for database
+        let detailedMethod = selectedMethod;
+        if (selectedProvider) {
+            detailedMethod = `${selectedMethod} - ${selectedProvider}`;
+        }
+
         // 2. Create Order
         const { data: order, error } = await supabase
           .from('orders')
@@ -181,18 +199,17 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
             voucher_code: appliedVoucher ? appliedVoucher.code : null,
             total_amount: finalTotal,
             status: 'pending',
-            payment_method: selectedMethod,
+            payment_method: detailedMethod,
             items: cart,
-            commission_paid: false // Ensure this is false initially
+            commission_paid: false
           })
           .select()
           .single();
 
         if (error || !order) throw error;
-
-        // Note: Commission Logic moved to AdminOrders (triggered on 'completed')
         
         setLastOrderTotal(finalTotal);
+        setLastOrderItems([...cart]); // Store items for WA message
         setOrderSuccess(order.id);
         clearCart();
         
@@ -209,7 +226,18 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
   const handleConfirmWA = () => {
     if (!orderSuccess) return;
-    const msg = `Halo Admin, saya sudah melakukan pesanan dengan ID: ${orderSuccess.slice(0, 8)}. Mohon diproses.\nTotal: ${formatRupiah(lastOrderTotal)}\nMetode: ${selectedMethod}`;
+    
+    // Construct Product List String
+    const productList = lastOrderItems.map(item => `- ${item.name} (x${item.quantity})`).join('\n');
+    
+    // Construct Method String
+    let methodString = selectedMethod;
+    if (selectedProvider) {
+        methodString = `${selectedMethod} - ${selectedProvider}`;
+    }
+
+    const msg = `Halo Admin, saya sudah melakukan pesanan.\n\nID Pesanan: ${orderSuccess.slice(0, 8)}\n\nProduk:\n${productList}\n\nTotal: ${formatRupiah(lastOrderTotal)}\nMetode Pembayaran: ${methodString}\n\nMohon segera diproses.`;
+    
     window.open(generateWhatsAppLink(settings.whatsapp_number, msg), '_blank');
   };
 
@@ -229,9 +257,10 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
            
            {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
              <div className="space-y-4">
-                <p className="text-sm text-slate-400">Silakan transfer ke salah satu rekening berikut:</p>
-                {settings.bank_accounts.map((acc, idx) => (
-                  <div key={idx} className="bg-slate-900 p-3 rounded">
+                <p className="text-sm text-slate-400">Silakan transfer ke rekening berikut:</p>
+                {/* Show only selected bank if available, else show all */}
+                {settings.bank_accounts.filter(b => !selectedProvider || b.bank === selectedProvider).map((acc, idx) => (
+                  <div key={idx} className="bg-slate-900 p-3 rounded border border-primary/30">
                     <p className="font-bold text-primary">{acc.bank}</p>
                     <p className="text-lg font-mono">{acc.number}</p>
                     <p className="text-sm text-slate-500">a.n {acc.name}</p>
@@ -242,9 +271,9 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
 
            {selectedMethod === 'EWALLET' && (
              <div className="space-y-4">
-                <p className="text-sm text-slate-400">Silakan transfer saldo E-Wallet ke nomor berikut:</p>
-                {settings.e_wallets?.map((wallet, idx) => (
-                    <div key={idx} className="bg-slate-900 p-3 rounded">
+                <p className="text-sm text-slate-400">Silakan transfer saldo ke:</p>
+                {settings.e_wallets?.filter(w => !selectedProvider || w.provider === selectedProvider).map((wallet, idx) => (
+                    <div key={idx} className="bg-slate-900 p-3 rounded border border-primary/30">
                         <p className="font-bold text-primary">{wallet.provider}</p>
                         <p className="text-lg font-mono">{wallet.number}</p>
                         <p className="text-sm text-slate-500">a.n {wallet.name}</p>
@@ -417,9 +446,43 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                 {/* Payment Methods */}
                 <div className="space-y-3 mb-6">
                     <p className="text-sm font-medium text-slate-400">Metode Pembayaran</p>
-                    <button type="button" onClick={() => setSelectedMethod('TRANSFER')} className={`w-full flex items-center p-3 rounded-lg border ${selectedMethod === 'TRANSFER' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-600'}`}><CreditCard size={18} className="mr-3" /> Transfer Bank</button>
-                    <button type="button" onClick={() => setSelectedMethod('EWALLET')} className={`w-full flex items-center p-3 rounded-lg border ${selectedMethod === 'EWALLET' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-600'}`}><Wallet size={18} className="mr-3" /> E-Wallet</button>
-                    <button type="button" onClick={() => setSelectedMethod('QRIS')} className={`w-full flex items-center p-3 rounded-lg border ${selectedMethod === 'QRIS' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-600'}`}><QrCode size={18} className="mr-3" /> QRIS</button>
+                    
+                    {/* TRANSFER */}
+                    <button type="button" onClick={() => { setSelectedMethod('TRANSFER'); setSelectedProvider(''); }} className={`w-full flex items-center p-3 rounded-lg border ${selectedMethod === 'TRANSFER' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-600'}`}><CreditCard size={18} className="mr-3" /> Transfer Bank</button>
+                    
+                    {/* Provider Dropdown for Transfer */}
+                    {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
+                        <select 
+                            className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm mt-2 outline-none focus:border-primary"
+                            value={selectedProvider}
+                            onChange={(e) => setSelectedProvider(e.target.value)}
+                        >
+                            <option value="">-- Pilih Bank --</option>
+                            {settings.bank_accounts.map((acc, idx) => (
+                                <option key={idx} value={acc.bank}>{acc.bank} - {acc.number}</option>
+                            ))}
+                        </select>
+                    )}
+
+                    {/* E-WALLET */}
+                    <button type="button" onClick={() => { setSelectedMethod('EWALLET'); setSelectedProvider(''); }} className={`w-full flex items-center p-3 rounded-lg border ${selectedMethod === 'EWALLET' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-600'}`}><Wallet size={18} className="mr-3" /> E-Wallet</button>
+                    
+                    {/* Provider Dropdown for E-Wallet */}
+                    {selectedMethod === 'EWALLET' && settings.e_wallets?.length > 0 && (
+                         <select 
+                            className="w-full bg-slate-900 border border-slate-600 rounded p-2 text-sm mt-2 outline-none focus:border-primary"
+                            value={selectedProvider}
+                            onChange={(e) => setSelectedProvider(e.target.value)}
+                        >
+                            <option value="">-- Pilih E-Wallet --</option>
+                            {settings.e_wallets.map((wallet, idx) => (
+                                <option key={idx} value={wallet.provider}>{wallet.provider} - {wallet.number}</option>
+                            ))}
+                        </select>
+                    )}
+
+                    {/* QRIS */}
+                    <button type="button" onClick={() => { setSelectedMethod('QRIS'); setSelectedProvider('QRIS'); }} className={`w-full flex items-center p-3 rounded-lg border ${selectedMethod === 'QRIS' ? 'border-primary bg-primary/10 text-primary' : 'border-slate-600'}`}><QrCode size={18} className="mr-3" /> QRIS</button>
                 </div>
 
                 <button 

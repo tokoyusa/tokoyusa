@@ -117,11 +117,15 @@ const AdminOrders: React.FC = () => {
         }
      } else {
         console.error("Update error:", error);
-        if (error?.message?.includes('commission_paid')) {
+        
+        // FIX: Handle 'error' possibly being null safely
+        const errorMessage = error?.message || "Unknown error occurred";
+
+        if (errorMessage.includes('commission_paid')) {
              alert("Error: Kolom 'commission_paid' tidak ditemukan di database. Silakan jalankan SQL perbaikan di bawah.");
              setShowSql(true);
         } else {
-             alert("Gagal update status: " + error.message);
+             alert("Gagal update status: " + errorMessage);
         }
         fetchOrders();
      }
