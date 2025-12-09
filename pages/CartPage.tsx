@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { CartItem, UserProfile, StoreSettings, Voucher } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, UserPlus, Lock, Mail, User, ExternalLink, ShoppingBag } from 'lucide-react';
+import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, UserPlus, Lock, Mail, User, ExternalLink, ShoppingBag, Download } from 'lucide-react';
 import { getSupabase } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 
@@ -107,14 +107,16 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     if (cart.length === 0) return;
     if (!supabase) return;
 
-    // Validation for specific provider
-    if (selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && !selectedProvider) {
-        alert("Silakan pilih Bank tujuan transfer.");
-        return;
-    }
-    if (selectedMethod === 'EWALLET' && settings.e_wallets.length > 0 && !selectedProvider) {
-        alert("Silakan pilih E-Wallet tujuan.");
-        return;
+    // Validation for specific provider (Only if Price > 0)
+    if (finalTotal > 0) {
+        if (selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && !selectedProvider) {
+            alert("Silakan pilih Bank tujuan transfer.");
+            return;
+        }
+        if (selectedMethod === 'EWALLET' && settings.e_wallets.length > 0 && !selectedProvider) {
+            alert("Silakan pilih E-Wallet tujuan.");
+            return;
+        }
     }
 
     setProcessing(true);
@@ -186,9 +188,14 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
              await supabase.from('profiles').update({ referred_by: userReferral }).eq('id', userId);
         }
 
+        // Logic for FREE ORDER (Price 0)
+        const isFreeOrder = finalTotal <= 0;
+        
         // Construct detailed payment method string for database
         let detailedMethod: string = selectedMethod;
-        if (selectedProvider) {
+        if (isFreeOrder) {
+            detailedMethod = 'GRATIS / FREE';
+        } else if (selectedProvider) {
             detailedMethod = `${selectedMethod} - ${selectedProvider}`;
         }
 
@@ -201,7 +208,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
             discount_amount: discountAmount,
             voucher_code: appliedVoucher ? appliedVoucher.code : null,
             total_amount: finalTotal,
-            status: 'pending',
+            status: isFreeOrder ? 'completed' : 'pending', // Auto-complete if free
             payment_method: detailedMethod,
             items: cart,
             commission_paid: false
@@ -243,98 +250,113 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   };
 
   if (orderSuccess) {
+    const isFree = lastOrderTotal <= 0;
+
     return (
       <div className="flex flex-col items-center justify-center py-12 text-center px-4">
         <CheckCircle className="text-green-500 w-20 h-20 mb-6 animate-in zoom-in" />
-        <h2 className="text-3xl font-bold text-white mb-2">Pesanan Berhasil!</h2>
+        <h2 className="text-3xl font-bold text-white mb-2">{isFree ? 'Produk Berhasil Diklaim!' : 'Pesanan Berhasil!'}</h2>
         <p className="text-slate-400 mb-6">ID Pesanan: #{orderSuccess.slice(0, 8)}</p>
         
-        <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 max-w-md w-full mb-6 text-left shadow-lg">
-           <h3 className="font-bold text-lg mb-4 border-b border-slate-700 pb-2">Instruksi Pembayaran</h3>
-           <div className="mb-4 text-center">
-              <span className="text-slate-400">Total yang harus dibayar:</span>
-              <p className="text-3xl font-bold text-white text-primary mt-1">{formatRupiah(lastOrderTotal)}</p>
+        {isFree ? (
+           // UI FOR FREE ORDER
+           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 max-w-md w-full mb-6 shadow-lg">
+               <p className="text-lg text-white mb-4">Karena total belanja Rp 0, pesanan Anda telah otomatis diselesaikan.</p>
+               <button 
+                  onClick={() => { window.location.href = '#/profile'; window.location.reload(); }} 
+                  className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-lg shadow-blue-500/20"
+                >
+                  <Download size={20} /> Lihat & Download Produk
+               </button>
            </div>
-           
-           {/* Detailed Payment Instructions */}
-           {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
-             <div className="space-y-4">
-                <p className="text-sm text-slate-400 font-medium bg-slate-900/50 p-2 rounded">Silakan transfer ke rekening berikut:</p>
-                {/* Show only selected bank if available, else show all */}
-                {settings.bank_accounts.filter(b => !selectedProvider || b.bank === selectedProvider).map((acc, idx) => (
-                  <div key={idx} className="bg-slate-900 p-4 rounded border border-primary/30 relative">
-                    <p className="font-bold text-primary text-lg">{acc.bank}</p>
-                    <div className="flex items-center justify-between mt-1">
-                        <p className="text-xl font-mono tracking-wide">{acc.number}</p>
-                        <button onClick={() => {navigator.clipboard.writeText(acc.number); alert('Disalin!')}} className="text-xs bg-slate-800 p-1 rounded hover:text-white text-slate-400">Salin</button>
-                    </div>
-                    <p className="text-sm text-slate-500 mt-1">a.n {acc.name}</p>
-                  </div>
-                ))}
-             </div>
-           )}
-
-           {selectedMethod === 'EWALLET' && (
-             <div className="space-y-4">
-                <p className="text-sm text-slate-400 font-medium bg-slate-900/50 p-2 rounded">Silakan transfer saldo ke:</p>
-                {settings.e_wallets?.filter(w => !selectedProvider || w.provider === selectedProvider).map((wallet, idx) => (
-                    <div key={idx} className="bg-slate-900 p-4 rounded border border-primary/30 relative">
-                        <p className="font-bold text-primary text-lg">{wallet.provider}</p>
+        ) : (
+           // UI FOR PAID ORDER
+           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 max-w-md w-full mb-6 text-left shadow-lg">
+               <h3 className="font-bold text-lg mb-4 border-b border-slate-700 pb-2">Instruksi Pembayaran</h3>
+               <div className="mb-4 text-center">
+                  <span className="text-slate-400">Total yang harus dibayar:</span>
+                  <p className="text-3xl font-bold text-white text-primary mt-1">{formatRupiah(lastOrderTotal)}</p>
+               </div>
+               
+               {/* Detailed Payment Instructions */}
+               {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
+                 <div className="space-y-4">
+                    <p className="text-sm text-slate-400 font-medium bg-slate-900/50 p-2 rounded">Silakan transfer ke rekening berikut:</p>
+                    {settings.bank_accounts.filter(b => !selectedProvider || b.bank === selectedProvider).map((acc, idx) => (
+                      <div key={idx} className="bg-slate-900 p-4 rounded border border-primary/30 relative">
+                        <p className="font-bold text-primary text-lg">{acc.bank}</p>
                         <div className="flex items-center justify-between mt-1">
-                            <p className="text-xl font-mono tracking-wide">{wallet.number}</p>
-                            <button onClick={() => {navigator.clipboard.writeText(wallet.number); alert('Disalin!')}} className="text-xs bg-slate-800 p-1 rounded hover:text-white text-slate-400">Salin</button>
+                            <p className="text-xl font-mono tracking-wide">{acc.number}</p>
+                            <button onClick={() => {navigator.clipboard.writeText(acc.number); alert('Disalin!')}} className="text-xs bg-slate-800 p-1 rounded hover:text-white text-slate-400">Salin</button>
                         </div>
-                        <p className="text-sm text-slate-500 mt-1">a.n {wallet.name}</p>
-                    </div>
-                ))}
-             </div>
-           )}
-
-           {selectedMethod === 'QRIS' && (
-             <div className="space-y-4 flex flex-col items-center w-full">
-                <p className="text-sm text-slate-400 font-medium w-full text-center bg-slate-900/50 p-2 rounded">Scan QRIS untuk membayar:</p>
-                {settings.qris_url ? (
-                  <div className="flex flex-col items-center w-full">
-                      <div className="bg-white p-4 rounded-xl inline-block w-full max-w-[300px] shadow-lg flex items-center justify-center min-h-[250px]">
-                        <img 
-                            src={settings.qris_url} 
-                            alt="QRIS Code" 
-                            className="w-full h-full object-contain"
-                            onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                                const parent = (e.target as HTMLElement).parentElement;
-                                if(parent) {
-                                    parent.innerHTML = '<div class="text-red-500 text-sm text-center font-medium">Gambar tidak dapat dimuat.<br/>Silakan upload ulang di Admin.</div>';
-                                }
-                            }}
-                        />
+                        <p className="text-sm text-slate-500 mt-1">a.n {acc.name}</p>
                       </div>
-                      <a href={settings.qris_url} target="_blank" className="mt-4 text-xs text-primary hover:underline flex items-center gap-1">
-                          <ExternalLink size={12}/> Buka Gambar Full Size
-                      </a>
-                  </div>
-                ) : (
-                  <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 text-center text-slate-500 w-full max-w-[300px]">
-                    <QrCode size={48} className="mx-auto mb-2 opacity-50"/>
-                    <p className="text-xs">QRIS belum diatur oleh Admin.</p>
-                  </div>
-                )}
-             </div>
-           )}
-           
-           <div className="mt-8 pt-6 border-t border-slate-700">
-             <button onClick={handleConfirmWA} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 transition-all hover:scale-[1.02]">
-                <Smartphone size={20} /> Konfirmasi Pembayaran ke WA
-             </button>
-             <p className="text-xs text-center text-slate-500 mt-3">
-                Wajib kirim bukti transfer agar pesanan diproses.
-             </p>
+                    ))}
+                 </div>
+               )}
+
+               {selectedMethod === 'EWALLET' && (
+                 <div className="space-y-4">
+                    <p className="text-sm text-slate-400 font-medium bg-slate-900/50 p-2 rounded">Silakan transfer saldo ke:</p>
+                    {settings.e_wallets?.filter(w => !selectedProvider || w.provider === selectedProvider).map((wallet, idx) => (
+                        <div key={idx} className="bg-slate-900 p-4 rounded border border-primary/30 relative">
+                            <p className="font-bold text-primary text-lg">{wallet.provider}</p>
+                            <div className="flex items-center justify-between mt-1">
+                                <p className="text-xl font-mono tracking-wide">{wallet.number}</p>
+                                <button onClick={() => {navigator.clipboard.writeText(wallet.number); alert('Disalin!')}} className="text-xs bg-slate-800 p-1 rounded hover:text-white text-slate-400">Salin</button>
+                            </div>
+                            <p className="text-sm text-slate-500 mt-1">a.n {wallet.name}</p>
+                        </div>
+                    ))}
+                 </div>
+               )}
+
+               {selectedMethod === 'QRIS' && (
+                 <div className="space-y-4 flex flex-col items-center w-full">
+                    <p className="text-sm text-slate-400 font-medium w-full text-center bg-slate-900/50 p-2 rounded">Scan QRIS untuk membayar:</p>
+                    {settings.qris_url ? (
+                      <div className="flex flex-col items-center w-full">
+                          <div className="bg-white p-4 rounded-xl inline-block w-full max-w-[300px] shadow-lg flex items-center justify-center min-h-[250px]">
+                            <img 
+                                src={settings.qris_url} 
+                                alt="QRIS Code" 
+                                className="w-full h-full object-contain"
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                    const parent = (e.target as HTMLElement).parentElement;
+                                    if(parent) {
+                                        parent.innerHTML = '<div class="text-red-500 text-sm text-center font-medium">Gambar tidak dapat dimuat.<br/>Silakan upload ulang di Admin.</div>';
+                                    }
+                                }}
+                            />
+                          </div>
+                          <a href={settings.qris_url} target="_blank" className="mt-4 text-xs text-primary hover:underline flex items-center gap-1">
+                              <ExternalLink size={12}/> Buka Gambar Full Size
+                          </a>
+                      </div>
+                    ) : (
+                      <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 text-center text-slate-500 w-full max-w-[300px]">
+                        <QrCode size={48} className="mx-auto mb-2 opacity-50"/>
+                        <p className="text-xs">QRIS belum diatur oleh Admin.</p>
+                      </div>
+                    )}
+                 </div>
+               )}
+               
+               <div className="mt-8 pt-6 border-t border-slate-700">
+                 <button onClick={handleConfirmWA} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 transition-all hover:scale-[1.02]">
+                    <Smartphone size={20} /> Konfirmasi Pembayaran ke WA
+                 </button>
+                 <p className="text-xs text-center text-slate-500 mt-3">
+                    Wajib kirim bukti transfer agar pesanan diproses.
+                 </p>
+               </div>
+               
+               <button onClick={() => { window.location.href = '#/profile'; window.location.reload(); }} className="w-full mt-4 text-primary hover:underline font-medium text-center">
+                   Lihat Akun & Pesanan Saya
+               </button>
            </div>
-        </div>
-        
-        <button onClick={() => { window.location.href = '#/profile'; window.location.reload(); }} className="text-primary hover:underline font-medium">
-           Lihat Akun & Pesanan Saya
-        </button>
+        )}
       </div>
     );
   }
@@ -457,66 +479,68 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                     </div>
                 )}
 
-                {/* Payment Methods */}
-                <div className="space-y-3 mb-6">
-                    <p className="text-sm font-bold text-white mb-2">Pilih Metode Pembayaran</p>
-                    
-                    {/* TRANSFER */}
-                    <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'TRANSFER' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
-                        <button type="button" onClick={() => { setSelectedMethod('TRANSFER'); setSelectedProvider(''); }} className="w-full flex items-center p-3 text-left">
-                            <CreditCard size={18} className={`mr-3 ${selectedMethod === 'TRANSFER' ? 'text-primary' : 'text-slate-400'}`} /> 
-                            <span className={selectedMethod === 'TRANSFER' ? 'text-primary font-bold' : 'text-slate-300'}>Transfer Bank</span>
-                        </button>
-                        
-                        {/* Provider Dropdown for Transfer */}
-                        {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
-                            <div className="px-3 pb-3 animate-in slide-in-from-top-2">
-                                <select 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm outline-none focus:border-primary text-slate-200"
-                                    value={selectedProvider}
-                                    onChange={(e) => setSelectedProvider(e.target.value)}
-                                >
-                                    <option value="">-- Pilih Bank --</option>
-                                    {settings.bank_accounts.map((acc, idx) => (
-                                        <option key={idx} value={acc.bank}>{acc.bank} - {acc.number}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-                    </div>
+                {/* Payment Methods (Only Show if Total > 0) */}
+                {finalTotal > 0 && (
+                  <div className="space-y-3 mb-6">
+                      <p className="text-sm font-bold text-white mb-2">Pilih Metode Pembayaran</p>
+                      
+                      {/* TRANSFER */}
+                      <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'TRANSFER' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
+                          <button type="button" onClick={() => { setSelectedMethod('TRANSFER'); setSelectedProvider(''); }} className="w-full flex items-center p-3 text-left">
+                              <CreditCard size={18} className={`mr-3 ${selectedMethod === 'TRANSFER' ? 'text-primary' : 'text-slate-400'}`} /> 
+                              <span className={selectedMethod === 'TRANSFER' ? 'text-primary font-bold' : 'text-slate-300'}>Transfer Bank</span>
+                          </button>
+                          
+                          {/* Provider Dropdown for Transfer */}
+                          {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
+                              <div className="px-3 pb-3 animate-in slide-in-from-top-2">
+                                  <select 
+                                      className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm outline-none focus:border-primary text-slate-200"
+                                      value={selectedProvider}
+                                      onChange={(e) => setSelectedProvider(e.target.value)}
+                                  >
+                                      <option value="">-- Pilih Bank --</option>
+                                      {settings.bank_accounts.map((acc, idx) => (
+                                          <option key={idx} value={acc.bank}>{acc.bank} - {acc.number}</option>
+                                      ))}
+                                  </select>
+                              </div>
+                          )}
+                      </div>
 
-                    {/* E-WALLET */}
-                    <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'EWALLET' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
-                        <button type="button" onClick={() => { setSelectedMethod('EWALLET'); setSelectedProvider(''); }} className="w-full flex items-center p-3 text-left">
-                            <Wallet size={18} className={`mr-3 ${selectedMethod === 'EWALLET' ? 'text-primary' : 'text-slate-400'}`} /> 
-                            <span className={selectedMethod === 'EWALLET' ? 'text-primary font-bold' : 'text-slate-300'}>E-Wallet</span>
-                        </button>
-                        
-                        {/* Provider Dropdown for E-Wallet */}
-                        {selectedMethod === 'EWALLET' && settings.e_wallets?.length > 0 && (
-                            <div className="px-3 pb-3 animate-in slide-in-from-top-2">
-                                <select 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm outline-none focus:border-primary text-slate-200"
-                                    value={selectedProvider}
-                                    onChange={(e) => setSelectedProvider(e.target.value)}
-                                >
-                                    <option value="">-- Pilih E-Wallet --</option>
-                                    {settings.e_wallets.map((wallet, idx) => (
-                                        <option key={idx} value={wallet.provider}>{wallet.provider} - {wallet.number}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
-                    </div>
+                      {/* E-WALLET */}
+                      <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'EWALLET' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
+                          <button type="button" onClick={() => { setSelectedMethod('EWALLET'); setSelectedProvider(''); }} className="w-full flex items-center p-3 text-left">
+                              <Wallet size={18} className={`mr-3 ${selectedMethod === 'EWALLET' ? 'text-primary' : 'text-slate-400'}`} /> 
+                              <span className={selectedMethod === 'EWALLET' ? 'text-primary font-bold' : 'text-slate-300'}>E-Wallet</span>
+                          </button>
+                          
+                          {/* Provider Dropdown for E-Wallet */}
+                          {selectedMethod === 'EWALLET' && settings.e_wallets?.length > 0 && (
+                              <div className="px-3 pb-3 animate-in slide-in-from-top-2">
+                                  <select 
+                                      className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm outline-none focus:border-primary text-slate-200"
+                                      value={selectedProvider}
+                                      onChange={(e) => setSelectedProvider(e.target.value)}
+                                  >
+                                      <option value="">-- Pilih E-Wallet --</option>
+                                      {settings.e_wallets.map((wallet, idx) => (
+                                          <option key={idx} value={wallet.provider}>{wallet.provider} - {wallet.number}</option>
+                                      ))}
+                                  </select>
+                              </div>
+                          )}
+                      </div>
 
-                    {/* QRIS */}
-                    <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'QRIS' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
-                        <button type="button" onClick={() => { setSelectedMethod('QRIS'); setSelectedProvider('QRIS'); }} className="w-full flex items-center p-3 text-left">
-                            <QrCode size={18} className={`mr-3 ${selectedMethod === 'QRIS' ? 'text-primary' : 'text-slate-400'}`} /> 
-                            <span className={selectedMethod === 'QRIS' ? 'text-primary font-bold' : 'text-slate-300'}>QRIS (Scan)</span>
-                        </button>
-                    </div>
-                </div>
+                      {/* QRIS */}
+                      <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'QRIS' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
+                          <button type="button" onClick={() => { setSelectedMethod('QRIS'); setSelectedProvider('QRIS'); }} className="w-full flex items-center p-3 text-left">
+                              <QrCode size={18} className={`mr-3 ${selectedMethod === 'QRIS' ? 'text-primary' : 'text-slate-400'}`} /> 
+                              <span className={selectedMethod === 'QRIS' ? 'text-primary font-bold' : 'text-slate-300'}>QRIS (Scan)</span>
+                          </button>
+                      </div>
+                  </div>
+                )}
 
                 <button 
                   type="submit" 
@@ -526,7 +550,9 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
                   {processing ? (
                       <><Loader2 size={20} className="animate-spin" /> Memproses...</>
                   ) : (
-                      user ? 'Bayar Sekarang' : 'Daftar & Bayar'
+                      user 
+                        ? (finalTotal > 0 ? 'Bayar Sekarang' : 'Klaim Sekarang (Gratis)') 
+                        : 'Daftar & Bayar'
                   )}
                 </button>
              </form>
