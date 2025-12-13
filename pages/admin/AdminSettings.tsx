@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { StoreSettings } from '../../types';
 import { Save, RefreshCw, Upload, Loader2, Image as ImageIcon, Wallet, Database, Terminal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getSupabase, BANK_MIGRATION_SQL } from '../../services/supabase';
+import { getSupabase, BANK_MIGRATION_SQL, COST_PRICE_MIGRATION_SQL } from '../../services/supabase';
 
 interface AdminSettingsProps {
   settings: StoreSettings;
@@ -17,6 +17,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
   });
   const [uploading, setUploading] = useState(false);
   const [showSql, setShowSql] = useState(false);
+  const [activeSql, setActiveSql] = useState('');
   const navigate = useNavigate();
   const supabase = getSupabase();
 
@@ -137,7 +138,6 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
       const resizedBlob = await resizeImage(file, 400);
       
       // 2. Convert langsung ke Base64 (tanpa upload ke Storage bucket)
-      // Ini menjamin gambar bisa diakses 100% tanpa masalah permission bucket
       const base64 = await fileToBase64(resizedBlob);
       
       setLocalSettings(prev => ({ ...prev, qris_url: base64 }));
@@ -147,6 +147,11 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
     } finally {
       setUploading(false);
     }
+  };
+
+  const showSqlModal = (sql: string) => {
+      setActiveSql(sql);
+      setShowSql(true);
   };
 
   return (
@@ -180,8 +185,8 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
          <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4">
           <h2 className="text-lg font-bold border-b border-slate-700 pb-2">Pengaturan Affiliate</h2>
           <div>
-            <label className="block text-sm mb-1">Komisi Affiliate (%)</label>
-            <p className="text-xs text-slate-400 mb-2">Persentase yang diterima affiliate dari total harga pesanan user yang direferensikan.</p>
+            <label className="block text-sm mb-1">Komisi Affiliate (% dari PROFIT/Keuntungan)</label>
+            <p className="text-xs text-slate-400 mb-2">Persentase yang diterima affiliate dari (Harga Jual - Harga Modal) per transaksi.</p>
             <div className="relative">
               <input 
                 type="number" 
@@ -285,25 +290,44 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
          <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 space-y-4 h-fit">
           <h2 className="text-lg font-bold border-b border-slate-700 pb-2 flex items-center gap-2"><Database size={18}/> Tools & Database</h2>
           
-          <button 
-             onClick={() => setShowSql(!showSql)}
-             className="w-full bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded flex items-center justify-center gap-2 text-sm"
-          >
-             <Terminal size={14} /> {showSql ? 'Sembunyikan SQL' : 'Lihat SQL Migrasi'}
-          </button>
+          <div className="space-y-2">
+             <button 
+                onClick={() => showSqlModal(BANK_MIGRATION_SQL)}
+                className="w-full bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded flex items-center justify-start gap-2 text-sm"
+             >
+                <Terminal size={14} /> SQL: Profil & Bank
+             </button>
+
+             <button 
+                onClick={() => showSqlModal(COST_PRICE_MIGRATION_SQL)}
+                className="w-full bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-2 rounded flex items-center justify-start gap-2 text-sm font-bold animate-pulse"
+             >
+                <Terminal size={14} /> SQL: Update Harga Modal (PENTING)
+             </button>
+          </div>
           
           {showSql && (
-             <div className="bg-slate-950 p-3 rounded text-xs font-mono text-green-400 overflow-x-auto relative">
-                <pre>{BANK_MIGRATION_SQL}</pre>
-                <button 
-                  onClick={() => {
-                     navigator.clipboard.writeText(BANK_MIGRATION_SQL);
-                     alert("Copied!");
-                  }}
-                  className="absolute top-2 right-2 bg-slate-800 text-white px-2 py-1 rounded text-[10px]"
-                >
-                   Copy
-                </button>
+             <div className="bg-slate-950 p-3 rounded text-xs font-mono text-green-400 relative">
+                <div className="max-h-32 overflow-y-auto overflow-x-auto">
+                    <pre>{activeSql}</pre>
+                </div>
+                <div className="flex justify-end gap-2 mt-2">
+                   <button 
+                     onClick={() => {
+                        navigator.clipboard.writeText(activeSql);
+                        alert("Copied!");
+                     }}
+                     className="bg-slate-800 text-white px-2 py-1 rounded text-[10px]"
+                   >
+                      Copy
+                   </button>
+                   <button 
+                     onClick={() => setShowSql(false)}
+                     className="bg-red-500/50 text-white px-2 py-1 rounded text-[10px]"
+                   >
+                      Tutup
+                   </button>
+                </div>
              </div>
           )}
 

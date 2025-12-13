@@ -24,541 +24,569 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   
   // State to remember order details for WhatsApp
   const [lastOrderTotal, setLastOrderTotal] = useState(0); 
-  const [lastOrderItems, setLastOrderItems] = useState<CartItem[]>([]); 
-  const [lastOrderMethod, setLastOrderMethod] = useState(''); 
-  
-  // Voucher States
-  const [voucherCode, setVoucherCode] = useState('');
-  const [checkingVoucher, setCheckingVoucher] = useState(false);
-  const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
-  const [voucherError, setVoucherError] = useState('');
+  const [lastOrderItems, setLastOrderItems] = useState<CartItem[]>([]);
+  const [lastOrderMethod, setLastOrderMethod] = useState<string>('');
+  const [isFreeOrder, setIsFreeOrder] = useState(false);
 
-  // Guest / Auto-Register State
-  const [guestData, setGuestData] = useState({
-    fullName: '',
-    email: '',
-    password: ''
-  });
+  // Voucher State
+  const [voucherCode, setVoucherCode] = useState('');
+  const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
+  const [checkingVoucher, setCheckingVoucher] = useState(false);
+
+  // Guest/Auto-Register Checkout State
+  const [guestName, setGuestName] = useState('');
+  const [guestEmail, setGuestEmail] = useState('');
+  const [guestPassword, setGuestPassword] = useState('');
+  const [guestPhone, setGuestPhone] = useState('');
 
   const navigate = useNavigate();
   const supabase = getSupabase();
 
-  // Basic total from items (Ensure numbers)
-  const subtotal = cart.reduce((acc, item) => {
-      const price = item.discount_price ? Number(item.discount_price) : Number(item.price);
-      return acc + (price * item.quantity);
+  // --- CALCULATION LOGIC ---
+  const rawSubtotal = cart.reduce((sum, item) => {
+    const price = item.discount_price || item.price;
+    return sum + (Number(price) * item.quantity);
   }, 0);
 
-  // Calculate discount
   let discountAmount = 0;
   if (appliedVoucher) {
-     const val = Number(appliedVoucher.discount_value);
-     if (appliedVoucher.discount_type === 'percentage') {
-        discountAmount = Math.floor(subtotal * (val / 100));
-     } else {
-        discountAmount = val;
-     }
+    if (appliedVoucher.discount_type === 'percentage') {
+       discountAmount = Math.round(rawSubtotal * (Number(appliedVoucher.discount_value) / 100));
+    } else {
+       discountAmount = Number(appliedVoucher.discount_value);
+    }
   }
+
+  // Ensure discount doesn't exceed subtotal
+  if (discountAmount > rawSubtotal) discountAmount = rawSubtotal;
+
+  const finalTotal = Math.max(0, rawSubtotal - discountAmount);
   
-  // Prevent negative total
-  if (discountAmount > subtotal) discountAmount = subtotal;
-
-  const finalTotal = subtotal - discountAmount;
-
+  // --- VOUCHER HANDLER ---
   const handleApplyVoucher = async () => {
-    if (!voucherCode.trim()) return;
+    if (!voucherCode.trim() || !supabase) return;
     setCheckingVoucher(true);
-    setVoucherError('');
     setAppliedVoucher(null);
 
-    if (!supabase) { setCheckingVoucher(false); return; }
+    const { data, error } = await supabase
+      .from('vouchers')
+      .select('*')
+      .eq('code', voucherCode.toUpperCase().trim())
+      .eq('is_active', true)
+      .single();
 
-    try {
-      // Fetch voucher strictly
-      const codeToSearch = voucherCode.trim().toUpperCase();
-      
-      const { data, error } = await supabase
-         .from('vouchers')
-         .select('*')
-         .eq('code', codeToSearch)
-         .eq('is_active', true)
-         .single();
-      
-      if (error || !data) {
-         setVoucherError('Voucher tidak valid atau sudah tidak aktif.');
-      } else {
-         setAppliedVoucher(data as Voucher);
-      }
-    } catch (err) {
-       setVoucherError('Gagal mengecek voucher.');
-    } finally {
-       setCheckingVoucher(false);
+    if (error || !data) {
+       alert("Voucher tidak valid atau sudah kadaluarsa.");
+    } else {
+       setAppliedVoucher(data as Voucher);
+       alert("Voucher berhasil dipasang!");
     }
+    setCheckingVoucher(false);
   };
 
-  const removeVoucher = () => {
+  const handleRemoveVoucher = () => {
      setAppliedVoucher(null);
      setVoucherCode('');
-     setVoucherError('');
   };
 
-  const handleCheckout = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // --- CHECKOUT HANDLER ---
+  const handleCheckout = async () => {
     if (cart.length === 0) return;
     if (!supabase) return;
 
-    // Validation for specific provider (Only if Price > 0)
-    if (finalTotal > 0) {
-        if (selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && !selectedProvider) {
-            alert("Silakan pilih Bank tujuan transfer.");
+    // VALIDASI INPUT GUEST
+    if (!user) {
+        if (!guestName || !guestEmail || !guestPassword || !guestPhone) {
+            alert("Mohon lengkapi data diri Anda untuk pendaftaran otomatis.");
             return;
         }
-        if (selectedMethod === 'EWALLET' && settings.e_wallets.length > 0 && !selectedProvider) {
-            alert("Silakan pilih E-Wallet tujuan.");
-            return;
-        }
+    } else if (selectedMethod !== 'QRIS' && selectedMethod !== 'TRIPAY') {
+       // Validate Provider selection for specific methods if Logged In
+       if (selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && !selectedProvider) {
+          alert("Silakan pilih Bank tujuan.");
+          return;
+       }
+       if (selectedMethod === 'EWALLET' && settings.e_wallets.length > 0 && !selectedProvider) {
+          alert("Silakan pilih E-Wallet tujuan.");
+          return;
+       }
     }
 
     setProcessing(true);
-    let userId = user?.id;
-    let userReferral = user?.referred_by;
-
-    // CHECK LOCAL STORAGE FOR REFERRAL (If user doesn't have one)
-    if (!userReferral) {
-        const localRef = localStorage.getItem('digitalstore_referral');
-        if (localRef) {
-             // Prevent self-referral
-             if (!user?.affiliate_code || user.affiliate_code !== localRef) {
-                 userReferral = localRef;
-             }
-        }
-    }
 
     try {
-        // 1. AUTO-REGISTER logic if user is not logged in
-        if (!userId) {
-            if (!guestData.email || !guestData.password || !guestData.fullName) {
-                alert("Mohon lengkapi data pendaftaran.");
-                setProcessing(false);
-                return;
-            }
+      let userId = user?.id;
 
-            // Sign Up
-            const { data: authData, error: authError } = await (supabase.auth as any).signUp({
-                email: guestData.email,
-                password: guestData.password,
-                options: { data: { full_name: guestData.fullName } }
-            });
+      // 1. AUTO-REGISTER / LOGIN IF GUEST
+      if (!user) {
+         // Check if email exists
+         const { data: existingUser } = await supabase.from('profiles').select('id').eq('email', guestEmail).single();
+         
+         if (existingUser) {
+             // Try to login (Simplification: In real app, prompt for password)
+             const { data: loginData, error: loginError } = await (supabase.auth as any).signInWithPassword({
+                 email: guestEmail,
+                 password: guestPassword
+             });
+             
+             if (loginError) {
+                 alert("Email sudah terdaftar. Gagal login otomatis: " + loginError.message);
+                 setProcessing(false);
+                 return;
+             }
+             userId = loginData.user.id;
+         } else {
+             // Register New User
+             const { data: authData, error: authError } = await (supabase.auth as any).signUp({
+                 email: guestEmail,
+                 password: guestPassword,
+                 options: { data: { full_name: guestName } }
+             });
 
-            if (authError) throw authError;
-
-            if (authData.user) {
-                userId = authData.user.id;
-                
-                // Create Profile for new user
-                const profilePayload: any = {
+             if (authError) throw authError;
+             
+             userId = authData.user?.id;
+             
+             // Create Profile Manual Ensure
+             if (userId) {
+                // Check if profile created by trigger, if not create
+                const { error: profileError } = await supabase.from('profiles').insert({
                     id: userId,
-                    email: guestData.email,
-                    full_name: guestData.fullName,
+                    email: guestEmail,
+                    full_name: guestName,
+                    phone: guestPhone,
                     role: 'user'
-                };
+                }).select();
                 
-                // Save referral code to profile if exists
-                if (userReferral) {
-                    profilePayload.referred_by = userReferral;
+                if (profileError && !profileError.message.includes('duplicate')) {
+                    console.error("Profile creation error", profileError);
                 }
+             }
+         }
+      }
 
-                const { error: profileError } = await supabase.from('profiles').insert(profilePayload);
-                
-                if (profileError) {
-                   // Ignore duplicate key error (if user recreated profile quickly)
-                   if (!profileError.message.includes('duplicate')) throw profileError;
-                }
+      // 2. CHECK REFERRAL (AFFILIATE) from LocalStorage
+      let referredBy = null;
+      if (user?.referred_by) {
+          referredBy = user.referred_by;
+      } else {
+          referredBy = localStorage.getItem('digitalstore_referral');
+      }
 
-                // Auto Login
-                await (supabase.auth as any).signInWithPassword({
-                    email: guestData.email,
-                    password: guestData.password
-                });
-            } else {
-                throw new Error("Gagal membuat akun.");
-            }
-        } else if (userReferral && !user?.referred_by) {
-             // If existing user doesn't have referral but clicked a link, update their profile
-             await supabase.from('profiles').update({ referred_by: userReferral }).eq('id', userId);
-        }
+      // If user was just created (guest), update their referral code
+      if (userId && referredBy && !user?.referred_by) {
+          await supabase.from('profiles').update({ referred_by: referredBy }).eq('id', userId);
+      }
 
-        // Logic for FREE ORDER (Price 0)
-        const isFreeOrder = finalTotal <= 0;
-        
-        // Construct detailed payment method string for database
-        let detailedMethod: string = selectedMethod;
-        if (isFreeOrder) {
-            detailedMethod = 'GRATIS / FREE';
-        } else if (selectedProvider) {
-            detailedMethod = `${selectedMethod} - ${selectedProvider}`;
-        }
+      // 3. PREPARE DETAILED PAYMENT METHOD STRING
+      let detailedMethod: string = selectedMethod;
+      if (finalTotal <= 0) {
+          detailedMethod = 'GRATIS / FREE';
+      } else if (selectedMethod === 'TRANSFER' || selectedMethod === 'EWALLET') {
+          // Add Provider Name (e.g., "EWALLET - DANA")
+          if (selectedProvider) {
+              detailedMethod = `${selectedMethod} - ${selectedProvider}`;
+          }
+      }
 
-        // 2. Create Order
-        const { data: order, error } = await supabase
-          .from('orders')
-          .insert({
-            user_id: userId,
-            subtotal: subtotal,
-            discount_amount: discountAmount,
-            voucher_code: appliedVoucher ? appliedVoucher.code : null,
-            total_amount: finalTotal,
-            status: isFreeOrder ? 'completed' : 'pending', // Auto-complete if free
-            payment_method: detailedMethod,
-            items: cart,
-            commission_paid: false
-          })
-          .select()
-          .single();
+      // 4. CREATE ORDER
+      const status = finalTotal <= 0 ? 'completed' : 'pending';
 
-        if (error || !order) throw error;
-        
-        // Save State for Success Screen BEFORE clearing cart
-        setLastOrderTotal(finalTotal);
-        setLastOrderItems([...cart]); 
-        setLastOrderMethod(detailedMethod);
-        setOrderSuccess(order.id);
-        
-        clearCart();
-        
-        // Clear local storage referral if used
-        localStorage.removeItem('digitalstore_referral');
-        
+      const payload: any = {
+        user_id: userId, // Can be null if really Guest, but we auto-registered
+        total_amount: finalTotal,
+        subtotal: rawSubtotal,
+        discount_amount: discountAmount,
+        voucher_code: appliedVoucher?.code || null,
+        status: status, 
+        payment_method: detailedMethod,
+        items: cart.map(item => ({
+          product_id: item.id,
+          product_name: item.name,
+          price: item.discount_price || item.price,
+          cost_price: item.cost_price || 0, // SNAPSHOT COST PRICE FOR PROFIT CALC
+          file_url: item.file_url 
+        })),
+        guest_info: !userId ? { name: guestName, whatsapp: guestPhone } : null
+      };
+
+      const { data: orderData, error } = await supabase
+        .from('orders')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // 5. SUCCESS HANDLING
+      setLastOrderTotal(finalTotal);
+      setLastOrderItems(cart); // Save items for WA message
+      setLastOrderMethod(detailedMethod); // Save specific method
+      setIsFreeOrder(finalTotal <= 0);
+      setOrderSuccess(orderData.id);
+      clearCart();
+      
+      // Clear voucher
+      setAppliedVoucher(null);
+      setVoucherCode('');
+
     } catch (err: any) {
-        console.error(err);
-        alert("Terjadi kesalahan: " + err.message);
+      alert("Gagal membuat pesanan: " + err.message);
     } finally {
-        setProcessing(false);
+      setProcessing(false);
     }
   };
 
   const handleConfirmWA = () => {
-    if (!orderSuccess) return;
+    // Build Detailed Product List
+    const itemsList = lastOrderItems.map((item, idx) => `${idx + 1}. ${item.name} (x${item.quantity})`).join('\n');
+
+    const message = `Halo Admin, saya sudah melakukan checkout.
+
+*Detail Pesanan:*
+${itemsList}
+
+*Total:* ${formatRupiah(lastOrderTotal)}
+*Metode Pembayaran:* ${lastOrderMethod}
+*ID Pesanan:* ${orderSuccess?.substring(0, 8)}
+
+Mohon segera diproses. Terima kasih.`;
     
-    // Construct Product List String with numbering
-    const productList = lastOrderItems.map((item, index) => `${index + 1}. ${item.name} (${item.quantity}x)`).join('\n');
-    
-    // Construct Message
-    const msg = `Halo Admin, saya ada pesanan baru di Website.\n\n*ID Pesanan:* #${orderSuccess.slice(0, 8)}\n\n*Detail Produk:* \n${productList}\n\n*Total Bayar:* ${formatRupiah(lastOrderTotal)}\n*Metode Pembayaran:* ${lastOrderMethod}\n\nMohon dicek dan diproses. Terima kasih.`;
-    
-    window.open(generateWhatsAppLink(settings.whatsapp_number, msg), '_blank');
+    const adminNumber = settings.whatsapp_number || '6281234567890';
+    window.open(generateWhatsAppLink(adminNumber, message), '_blank');
   };
 
+  const openFullImage = (url: string) => {
+    window.open(url, '_blank');
+  };
+
+  // --- RENDER SUCCESS SCREEN ---
   if (orderSuccess) {
-    const isFree = lastOrderTotal <= 0;
-
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-        <CheckCircle className="text-green-500 w-20 h-20 mb-6 animate-in zoom-in" />
-        <h2 className="text-3xl font-bold text-white mb-2">{isFree ? 'Produk Berhasil Diklaim!' : 'Pesanan Berhasil!'}</h2>
-        <p className="text-slate-400 mb-6">ID Pesanan: #{orderSuccess.slice(0, 8)}</p>
-        
-        {isFree ? (
-           // UI FOR FREE ORDER
-           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 max-w-md w-full mb-6 shadow-lg">
-               <p className="text-lg text-white mb-4">Karena total belanja Rp 0, pesanan Anda telah otomatis diselesaikan.</p>
-               <button 
-                  onClick={() => { window.location.href = '#/profile'; window.location.reload(); }} 
-                  className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 transition-all hover:scale-[1.02] shadow-lg shadow-blue-500/20"
-                >
-                  <Download size={20} /> Lihat & Download Produk
-               </button>
-           </div>
-        ) : (
-           // UI FOR PAID ORDER
-           <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 max-w-md w-full mb-6 text-left shadow-lg">
-               <h3 className="font-bold text-lg mb-4 border-b border-slate-700 pb-2">Instruksi Pembayaran</h3>
-               <div className="mb-4 text-center">
-                  <span className="text-slate-400">Total yang harus dibayar:</span>
-                  <p className="text-3xl font-bold text-white text-primary mt-1">{formatRupiah(lastOrderTotal)}</p>
-               </div>
-               
-               {/* Detailed Payment Instructions */}
-               {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
-                 <div className="space-y-4">
-                    <p className="text-sm text-slate-400 font-medium bg-slate-900/50 p-2 rounded">Silakan transfer ke rekening berikut:</p>
-                    {settings.bank_accounts.filter(b => !selectedProvider || b.bank === selectedProvider).map((acc, idx) => (
-                      <div key={idx} className="bg-slate-900 p-4 rounded border border-primary/30 relative">
-                        <p className="font-bold text-primary text-lg">{acc.bank}</p>
-                        <div className="flex items-center justify-between mt-1">
-                            <p className="text-xl font-mono tracking-wide">{acc.number}</p>
-                            <button onClick={() => {navigator.clipboard.writeText(acc.number); alert('Disalin!')}} className="text-xs bg-slate-800 p-1 rounded hover:text-white text-slate-400">Salin</button>
-                        </div>
-                        <p className="text-sm text-slate-500 mt-1">a.n {acc.name}</p>
-                      </div>
-                    ))}
-                 </div>
-               )}
+      <div className="max-w-md mx-auto py-12 px-4 text-center">
+        <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-2xl">
+          <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/30">
+            <CheckCircle className="text-white w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Pesanan Berhasil!</h2>
+          <p className="text-slate-400 mb-6 text-sm">ID: <span className="font-mono text-slate-300">{orderSuccess}</span></p>
+          
+          <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 mb-6">
+            <p className="text-sm text-slate-400 mb-1">Total Pembayaran</p>
+            <p className="text-2xl font-bold text-primary">{formatRupiah(lastOrderTotal)}</p>
+            {isFreeOrder && <p className="text-green-500 text-xs font-bold mt-1">LUNAS (GRATIS)</p>}
+          </div>
 
-               {selectedMethod === 'EWALLET' && (
-                 <div className="space-y-4">
-                    <p className="text-sm text-slate-400 font-medium bg-slate-900/50 p-2 rounded">Silakan transfer saldo ke:</p>
-                    {settings.e_wallets?.filter(w => !selectedProvider || w.provider === selectedProvider).map((wallet, idx) => (
-                        <div key={idx} className="bg-slate-900 p-4 rounded border border-primary/30 relative">
-                            <p className="font-bold text-primary text-lg">{wallet.provider}</p>
-                            <div className="flex items-center justify-between mt-1">
-                                <p className="text-xl font-mono tracking-wide">{wallet.number}</p>
-                                <button onClick={() => {navigator.clipboard.writeText(wallet.number); alert('Disalin!')}} className="text-xs bg-slate-800 p-1 rounded hover:text-white text-slate-400">Salin</button>
-                            </div>
-                            <p className="text-sm text-slate-500 mt-1">a.n {wallet.name}</p>
-                        </div>
-                    ))}
-                 </div>
-               )}
+          {isFreeOrder ? (
+              <div className="space-y-4">
+                  <p className="text-slate-300 text-sm">
+                      Terima kasih! Karena total belanja Anda Rp 0, pesanan otomatis selesai.
+                  </p>
+                  <button 
+                    onClick={() => navigate('/profile')}
+                    className="w-full bg-primary hover:bg-blue-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-primary/20"
+                  >
+                    <Download size={20} /> Lihat & Download Produk
+                  </button>
+              </div>
+          ) : (
+              <div className="space-y-4">
+                <p className="text-slate-300 text-sm mb-4">
+                    Silakan selesaikan pembayaran dan kirim konfirmasi ke WhatsApp Admin agar pesanan segera diproses.
+                </p>
 
-               {selectedMethod === 'QRIS' && (
-                 <div className="space-y-4 flex flex-col items-center w-full">
-                    <p className="text-sm text-slate-400 font-medium w-full text-center bg-slate-900/50 p-2 rounded">Scan QRIS untuk membayar:</p>
-                    {settings.qris_url ? (
-                      <div className="flex flex-col items-center w-full">
-                          <div className="bg-white p-4 rounded-xl inline-block w-full max-w-[300px] shadow-lg flex items-center justify-center min-h-[250px]">
-                            <img 
+                {selectedMethod === 'QRIS' && settings.qris_url && (
+                    <div className="mb-6 flex flex-col items-center">
+                        <div className="p-3 bg-white rounded-lg shadow-md max-w-[250px] overflow-hidden relative">
+                             <img 
                                 src={settings.qris_url} 
-                                alt="QRIS Code" 
-                                className="w-full h-full object-contain"
-                                onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                    const parent = (e.target as HTMLElement).parentElement;
-                                    if(parent) {
-                                        parent.innerHTML = '<div class="text-red-500 text-sm text-center font-medium">Gambar tidak dapat dimuat.<br/>Silakan upload ulang di Admin.</div>';
-                                    }
-                                }}
-                            />
-                          </div>
-                          <a href={settings.qris_url} target="_blank" className="mt-4 text-xs text-primary hover:underline flex items-center gap-1">
-                              <ExternalLink size={12}/> Buka Gambar Full Size
-                          </a>
-                      </div>
-                    ) : (
-                      <div className="bg-slate-900 p-8 rounded-xl border border-slate-700 text-center text-slate-500 w-full max-w-[300px]">
-                        <QrCode size={48} className="mx-auto mb-2 opacity-50"/>
-                        <p className="text-xs">QRIS belum diatur oleh Admin.</p>
-                      </div>
-                    )}
-                 </div>
-               )}
-               
-               <div className="mt-8 pt-6 border-t border-slate-700">
-                 <button onClick={handleConfirmWA} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 transition-all hover:scale-[1.02]">
-                    <Smartphone size={20} /> Konfirmasi Pembayaran ke WA
-                 </button>
-                 <p className="text-xs text-center text-slate-500 mt-3">
-                    Wajib kirim bukti transfer agar pesanan diproses.
-                 </p>
-               </div>
-               
-               <button onClick={() => { window.location.href = '#/profile'; window.location.reload(); }} className="w-full mt-4 text-primary hover:underline font-medium text-center">
-                   Lihat Akun & Pesanan Saya
-               </button>
-           </div>
-        )}
+                                alt="QRIS" 
+                                className="w-full h-auto object-contain"
+                                onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+                             />
+                        </div>
+                        <button 
+                           onClick={() => openFullImage(settings.qris_url!)}
+                           className="text-xs text-primary mt-2 flex items-center gap-1 hover:underline"
+                        >
+                           <ExternalLink size={12} /> Buka Gambar Full Size
+                        </button>
+                        <p className="text-xs text-slate-400 mt-2">Scan QRIS di atas untuk membayar</p>
+                    </div>
+                )}
+
+                <button 
+                    onClick={handleConfirmWA}
+                    className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-600/20"
+                >
+                    <Smartphone size={20} /> Konfirmasi via WhatsApp
+                </button>
+                
+                <button 
+                    onClick={() => navigate('/profile')}
+                    className="text-slate-400 text-sm hover:text-white mt-4"
+                >
+                    Lihat Riwayat Pesanan
+                </button>
+              </div>
+          )}
+        </div>
       </div>
     );
   }
 
-  return (
-    <div className="py-8">
-      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2"><CreditCard className="text-primary"/> Keranjang Belanja</h1>
-      
-      {cart.length === 0 ? (
-        <div className="text-center py-12 bg-slate-800 rounded-xl border border-slate-700">
-          <ShoppingBag size={48} className="mx-auto text-slate-600 mb-4" />
-          <p className="text-slate-400 mb-4 text-lg">Keranjang Anda masih kosong</p>
-          <button onClick={() => navigate('/')} className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-full font-bold transition-colors">Mulai Belanja</button>
+  // --- RENDER EMPTY CART ---
+  if (cart.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4">
+        <div className="bg-slate-800 p-6 rounded-full mb-4 shadow-xl">
+           <ShoppingBag className="w-12 h-12 text-slate-500" />
         </div>
-      ) : (
-        <div className="grid md:grid-cols-3 gap-8">
-          {/* Items List */}
-          <div className="md:col-span-2 space-y-4">
-            {cart.map(item => (
-              <div key={item.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 flex gap-4 items-center shadow-sm">
-                 <img src={item.image_url || 'https://via.placeholder.com/100'} alt={item.name} className="w-20 h-20 rounded-lg object-cover bg-slate-700" />
-                 <div className="flex-1">
-                   <h3 className="font-bold text-slate-200 text-lg">{item.name}</h3>
-                   <span className="text-xs text-slate-500 uppercase">{item.category}</span>
-                   <p className="text-primary font-bold mt-1">{formatRupiah(item.discount_price || item.price)}</p>
-                 </div>
-                 <button onClick={() => removeFromCart(item.id)} className="text-slate-400 hover:text-red-500 p-2 hover:bg-slate-700 rounded-full transition-colors">
-                   <Trash2 size={20} />
-                 </button>
+        <h2 className="text-xl font-bold text-white mb-2">Keranjang Kosong</h2>
+        <p className="text-slate-400 mb-6">Belum ada produk yang ditambahkan.</p>
+        <button onClick={() => window.location.href = '/'} className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-full font-medium transition-colors">
+          Mulai Belanja
+        </button>
+      </div>
+    );
+  }
+
+  // --- RENDER CHECKOUT FORM ---
+  return (
+    <div className="max-w-4xl mx-auto py-6 px-4">
+      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
+         <ShoppingBag className="text-primary"/> Keranjang Belanja
+      </h1>
+      
+      <div className="flex flex-col lg:flex-row gap-8">
+        {/* LEFT: Cart Items */}
+        <div className="flex-1 space-y-4">
+          <div className="bg-slate-800 rounded-xl overflow-hidden border border-slate-700">
+            {cart.map((item) => (
+              <div key={item.id} className="p-4 flex gap-4 border-b border-slate-700 last:border-0 hover:bg-slate-750 transition-colors">
+                <img src={item.image_url || 'https://via.placeholder.com/80'} className="w-20 h-20 object-cover rounded bg-slate-700" alt={item.name} />
+                <div className="flex-1">
+                  <h3 className="font-bold text-white line-clamp-2">{item.name}</h3>
+                  <p className="text-sm text-slate-400 mb-2">{item.category}</p>
+                  <div className="flex justify-between items-end">
+                    <p className="text-primary font-bold">{formatRupiah(item.discount_price || item.price)}</p>
+                    <button 
+                      onClick={() => removeFromCart(item.id)}
+                      className="text-red-400 hover:text-red-300 p-2 rounded hover:bg-red-400/10 transition-colors"
+                      title="Hapus"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
 
-          {/* Checkout Form */}
-          <div className="md:col-span-1">
-             <form onSubmit={handleCheckout} className="bg-slate-800 p-6 rounded-xl border border-slate-700 sticky top-24 shadow-xl">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Wallet size={20}/> Ringkasan</h3>
-                
-                {/* Voucher Input */}
-                <div className="mb-6 border-b border-slate-700 pb-6">
-                   <label className="text-sm text-slate-400 mb-2 flex items-center gap-1 font-medium"><Ticket size={14}/> Kode Voucher</label>
-                   {appliedVoucher ? (
-                     <div className="flex justify-between items-center bg-green-500/10 border border-green-500/20 p-3 rounded-lg text-green-400 text-sm">
-                        <span className="font-mono font-bold">{appliedVoucher.code}</span>
-                        <button type="button" onClick={removeVoucher} className="hover:text-white"><X size={16} /></button>
-                     </div>
-                   ) : (
-                      <div className="flex gap-2">
-                        <input 
-                          type="text" 
-                          placeholder="Masukkan kode..." 
-                          className="flex-1 bg-slate-900 border border-slate-600 rounded-lg p-2.5 text-sm uppercase outline-none focus:border-primary transition-colors"
-                          value={voucherCode}
-                          onChange={e => setVoucherCode(e.target.value)}
-                        />
-                        <button type="button" onClick={handleApplyVoucher} disabled={checkingVoucher} className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors">
-                           {checkingVoucher ? <Loader2 size={16} className="animate-spin" /> : 'Cek'}
-                        </button>
-                      </div>
-                   )}
-                   {voucherError && <p className="text-red-500 text-xs mt-2 flex items-center gap-1"><X size={12}/> {voucherError}</p>}
+          {/* Voucher Section */}
+          <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+             <h3 className="font-bold text-white mb-3 flex items-center gap-2"><Ticket size={18} className="text-accent"/> Voucher Diskon</h3>
+             
+             {appliedVoucher ? (
+                <div className="flex justify-between items-center bg-green-500/10 border border-green-500/20 p-3 rounded-lg">
+                   <div>
+                      <span className="font-mono font-bold text-green-500">{appliedVoucher.code}</span>
+                      <p className="text-xs text-green-400">Diskon {appliedVoucher.discount_type === 'percentage' ? `${appliedVoucher.discount_value}%` : formatRupiah(Number(appliedVoucher.discount_value))}</p>
+                   </div>
+                   <button onClick={handleRemoveVoucher} className="text-red-400 hover:text-red-300 p-1">
+                      <X size={18} />
+                   </button>
                 </div>
-
-                {/* Total Calculation */}
-                <div className="space-y-2 mb-4 text-slate-300 text-sm">
-                   <div className="flex justify-between"><span>Subtotal ({cart.length} item)</span><span>{formatRupiah(subtotal)}</span></div>
-                   {appliedVoucher && (
-                     <div className="flex justify-between text-green-400"><span>Diskon Voucher</span><span>- {formatRupiah(discountAmount)}</span></div>
-                   )}
+             ) : (
+                <div className="flex gap-2">
+                   <input 
+                      type="text" 
+                      placeholder="Masukkan Kode Voucher"
+                      className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 uppercase focus:border-primary outline-none"
+                      value={voucherCode}
+                      onChange={e => setVoucherCode(e.target.value)}
+                   />
+                   <button 
+                      onClick={handleApplyVoucher}
+                      disabled={checkingVoucher || !voucherCode}
+                      className="bg-slate-700 hover:bg-slate-600 text-white px-4 py-2 rounded font-medium disabled:opacity-50"
+                   >
+                      {checkingVoucher ? <Loader2 size={18} className="animate-spin"/> : 'Pakai'}
+                   </button>
                 </div>
-                <div className="flex justify-between mb-6 text-xl font-bold text-white border-t border-slate-700 pt-4">
-                  <span>Total Bayar</span><span className="text-primary">{formatRupiah(finalTotal)}</span>
-                </div>
-
-                {/* AUTO REGISTER FORM IF NOT LOGGED IN */}
-                {!user && (
-                    <div className="bg-slate-900 p-4 rounded-xl mb-6 border border-slate-700 relative overflow-hidden">
-                        <div className="absolute top-0 left-0 w-1 h-full bg-primary"></div>
-                        <div className="flex items-center gap-2 mb-4 text-white font-bold text-sm">
-                            <UserPlus size={18} className="text-primary" /> Data Pemesan (Auto-Daftar)
-                        </div>
-                        <div className="space-y-3">
-                            <div className="relative">
-                                <User size={16} className="absolute left-3 top-3 text-slate-500" />
-                                <input 
-                                    required 
-                                    type="text" 
-                                    placeholder="Nama Lengkap" 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 pl-10 text-sm focus:border-primary outline-none focus:bg-slate-800 transition-colors"
-                                    value={guestData.fullName}
-                                    onChange={e => setGuestData({...guestData, fullName: e.target.value})}
-                                />
-                            </div>
-                            <div className="relative">
-                                <Mail size={16} className="absolute left-3 top-3 text-slate-500" />
-                                <input 
-                                    required 
-                                    type="email" 
-                                    placeholder="Email Aktif (Untuk login)" 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 pl-10 text-sm focus:border-primary outline-none focus:bg-slate-800 transition-colors"
-                                    value={guestData.email}
-                                    onChange={e => setGuestData({...guestData, email: e.target.value})}
-                                />
-                            </div>
-                            <div className="relative">
-                                <Lock size={16} className="absolute left-3 top-3 text-slate-500" />
-                                <input 
-                                    required 
-                                    type="password" 
-                                    placeholder="Buat Password" 
-                                    className="w-full bg-slate-800 border border-slate-600 rounded-lg p-2.5 pl-10 text-sm focus:border-primary outline-none focus:bg-slate-800 transition-colors"
-                                    value={guestData.password}
-                                    onChange={e => setGuestData({...guestData, password: e.target.value})}
-                                />
-                            </div>
-                            <div className="text-xs text-slate-500 mt-2 text-center">
-                                Sudah punya akun? <span className="text-primary cursor-pointer hover:underline font-bold" onClick={() => navigate('/login')}>Login di sini</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* Payment Methods (Only Show if Total > 0) */}
-                {finalTotal > 0 && (
-                  <div className="space-y-3 mb-6">
-                      <p className="text-sm font-bold text-white mb-2">Pilih Metode Pembayaran</p>
-                      
-                      {/* TRANSFER */}
-                      <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'TRANSFER' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
-                          <button type="button" onClick={() => { setSelectedMethod('TRANSFER'); setSelectedProvider(''); }} className="w-full flex items-center p-3 text-left">
-                              <CreditCard size={18} className={`mr-3 ${selectedMethod === 'TRANSFER' ? 'text-primary' : 'text-slate-400'}`} /> 
-                              <span className={selectedMethod === 'TRANSFER' ? 'text-primary font-bold' : 'text-slate-300'}>Transfer Bank</span>
-                          </button>
-                          
-                          {/* Provider Dropdown for Transfer */}
-                          {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
-                              <div className="px-3 pb-3 animate-in slide-in-from-top-2">
-                                  <select 
-                                      className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm outline-none focus:border-primary text-slate-200"
-                                      value={selectedProvider}
-                                      onChange={(e) => setSelectedProvider(e.target.value)}
-                                  >
-                                      <option value="">-- Pilih Bank --</option>
-                                      {settings.bank_accounts.map((acc, idx) => (
-                                          <option key={idx} value={acc.bank}>{acc.bank} - {acc.number}</option>
-                                      ))}
-                                  </select>
-                              </div>
-                          )}
-                      </div>
-
-                      {/* E-WALLET */}
-                      <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'EWALLET' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
-                          <button type="button" onClick={() => { setSelectedMethod('EWALLET'); setSelectedProvider(''); }} className="w-full flex items-center p-3 text-left">
-                              <Wallet size={18} className={`mr-3 ${selectedMethod === 'EWALLET' ? 'text-primary' : 'text-slate-400'}`} /> 
-                              <span className={selectedMethod === 'EWALLET' ? 'text-primary font-bold' : 'text-slate-300'}>E-Wallet</span>
-                          </button>
-                          
-                          {/* Provider Dropdown for E-Wallet */}
-                          {selectedMethod === 'EWALLET' && settings.e_wallets?.length > 0 && (
-                              <div className="px-3 pb-3 animate-in slide-in-from-top-2">
-                                  <select 
-                                      className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-sm outline-none focus:border-primary text-slate-200"
-                                      value={selectedProvider}
-                                      onChange={(e) => setSelectedProvider(e.target.value)}
-                                  >
-                                      <option value="">-- Pilih E-Wallet --</option>
-                                      {settings.e_wallets.map((wallet, idx) => (
-                                          <option key={idx} value={wallet.provider}>{wallet.provider} - {wallet.number}</option>
-                                      ))}
-                                  </select>
-                              </div>
-                          )}
-                      </div>
-
-                      {/* QRIS */}
-                      <div className={`rounded-lg border transition-all duration-200 overflow-hidden ${selectedMethod === 'QRIS' ? 'border-primary bg-slate-900' : 'border-slate-600 bg-slate-800'}`}>
-                          <button type="button" onClick={() => { setSelectedMethod('QRIS'); setSelectedProvider('QRIS'); }} className="w-full flex items-center p-3 text-left">
-                              <QrCode size={18} className={`mr-3 ${selectedMethod === 'QRIS' ? 'text-primary' : 'text-slate-400'}`} /> 
-                              <span className={selectedMethod === 'QRIS' ? 'text-primary font-bold' : 'text-slate-300'}>QRIS (Scan)</span>
-                          </button>
-                      </div>
-                  </div>
-                )}
-
-                <button 
-                  type="submit" 
-                  disabled={processing}
-                  className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 rounded-lg transition-all shadow-lg hover:shadow-blue-500/25 flex items-center justify-center gap-2 transform active:scale-[0.98]"
-                >
-                  {processing ? (
-                      <><Loader2 size={20} className="animate-spin" /> Memproses...</>
-                  ) : (
-                      user 
-                        ? (finalTotal > 0 ? 'Bayar Sekarang' : 'Klaim Sekarang (Gratis)') 
-                        : 'Daftar & Bayar'
-                  )}
-                </button>
-             </form>
+             )}
           </div>
         </div>
-      )}
+
+        {/* RIGHT: Payment & Summary */}
+        <div className="lg:w-96 space-y-6">
+            
+            {/* Auto-Register Form for Guest */}
+            {!user && (
+                <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-lg">
+                    <h2 className="font-bold text-white mb-4 flex items-center gap-2 border-b border-slate-700 pb-2">
+                        <UserPlus size={18} className="text-primary"/> Data Pembeli
+                    </h2>
+                    <p className="text-xs text-slate-400 mb-4">Isi data ini untuk pendaftaran akun otomatis.</p>
+                    
+                    <div className="space-y-3">
+                        <div className="relative">
+                            <User className="absolute left-3 top-3 text-slate-500" size={16} />
+                            <input 
+                                type="text" 
+                                placeholder="Nama Lengkap" 
+                                className="w-full bg-slate-900 border border-slate-600 rounded p-2.5 pl-9 text-sm focus:border-primary outline-none"
+                                value={guestName}
+                                onChange={e => setGuestName(e.target.value)}
+                            />
+                        </div>
+                        <div className="relative">
+                            <Smartphone className="absolute left-3 top-3 text-slate-500" size={16} />
+                            <input 
+                                type="text" 
+                                placeholder="No. WhatsApp" 
+                                className="w-full bg-slate-900 border border-slate-600 rounded p-2.5 pl-9 text-sm focus:border-primary outline-none"
+                                value={guestPhone}
+                                onChange={e => setGuestPhone(e.target.value)}
+                            />
+                        </div>
+                        <div className="relative">
+                            <Mail className="absolute left-3 top-3 text-slate-500" size={16} />
+                            <input 
+                                type="email" 
+                                placeholder="Email" 
+                                className="w-full bg-slate-900 border border-slate-600 rounded p-2.5 pl-9 text-sm focus:border-primary outline-none"
+                                value={guestEmail}
+                                onChange={e => setGuestEmail(e.target.value)}
+                            />
+                        </div>
+                        <div className="relative">
+                            <Lock className="absolute left-3 top-3 text-slate-500" size={16} />
+                            <input 
+                                type="password" 
+                                placeholder="Buat Password" 
+                                className="w-full bg-slate-900 border border-slate-600 rounded p-2.5 pl-9 text-sm focus:border-primary outline-none"
+                                value={guestPassword}
+                                onChange={e => setGuestPassword(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Payment Method Selection */}
+            {finalTotal > 0 && (
+                <div className="bg-slate-800 p-6 rounded-xl border border-slate-700">
+                    <h2 className="font-bold text-white mb-4 flex items-center gap-2">Metode Pembayaran</h2>
+                    <div className="space-y-2">
+                        {settings.bank_accounts.length > 0 && (
+                            <button 
+                                onClick={() => { setSelectedMethod('TRANSFER'); setSelectedProvider(''); }}
+                                className={`w-full p-3 rounded-lg flex items-center gap-3 border transition-all ${selectedMethod === 'TRANSFER' ? 'bg-primary/10 border-primary text-primary' : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'}`}
+                            >
+                                <CreditCard size={20} /> Transfer Bank Manual
+                            </button>
+                        )}
+                        
+                        {/* Sub-selection for Bank */}
+                        {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
+                            <div className="pl-4 pr-1 mb-2 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                {settings.bank_accounts.map((bank, idx) => (
+                                    <label key={idx} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-slate-700/50">
+                                        <input 
+                                            type="radio" 
+                                            name="bank_provider" 
+                                            value={bank.bank} 
+                                            checked={selectedProvider === bank.bank}
+                                            onChange={() => setSelectedProvider(bank.bank)}
+                                            className="accent-primary"
+                                        />
+                                        <span className="text-sm text-slate-300">{bank.bank} - {bank.number}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        )}
+
+                        {settings.e_wallets.length > 0 && (
+                            <button 
+                                onClick={() => { setSelectedMethod('EWALLET'); setSelectedProvider(''); }}
+                                className={`w-full p-3 rounded-lg flex items-center gap-3 border transition-all ${selectedMethod === 'EWALLET' ? 'bg-primary/10 border-primary text-primary' : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'}`}
+                            >
+                                <Wallet size={20} /> E-Wallet (DANA/OVO/DLL)
+                            </button>
+                        )}
+
+                        {/* Sub-selection for E-Wallet */}
+                        {selectedMethod === 'EWALLET' && settings.e_wallets.length > 0 && (
+                             <div className="pl-4 pr-1 mb-2 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                                {settings.e_wallets.map((wallet, idx) => (
+                                    <label key={idx} className="flex items-center gap-2 cursor-pointer p-2 rounded hover:bg-slate-700/50">
+                                        <input 
+                                            type="radio" 
+                                            name="wallet_provider" 
+                                            value={wallet.provider} 
+                                            checked={selectedProvider === wallet.provider}
+                                            onChange={() => setSelectedProvider(wallet.provider)}
+                                            className="accent-primary"
+                                        />
+                                        <span className="text-sm text-slate-300">{wallet.provider} - {wallet.number}</span>
+                                    </label>
+                                ))}
+                             </div>
+                        )}
+
+                        {settings.qris_url && (
+                            <button 
+                                onClick={() => setSelectedMethod('QRIS')}
+                                className={`w-full p-3 rounded-lg flex items-center gap-3 border transition-all ${selectedMethod === 'QRIS' ? 'bg-primary/10 border-primary text-primary' : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'}`}
+                            >
+                                <QrCode size={20} /> QRIS (Scan Barcode)
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Summary & Pay Button */}
+            <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 sticky top-24">
+                <h2 className="font-bold text-white mb-4">Ringkasan Belanja</h2>
+                <div className="space-y-2 text-sm text-slate-400 mb-4 border-b border-slate-700 pb-4">
+                    <div className="flex justify-between">
+                        <span>Total Harga ({cart.length} item)</span>
+                        <span>{formatRupiah(rawSubtotal)}</span>
+                    </div>
+                    {appliedVoucher && (
+                        <div className="flex justify-between text-green-400">
+                            <span>Diskon Voucher</span>
+                            <span>- {formatRupiah(discountAmount)}</span>
+                        </div>
+                    )}
+                </div>
+                
+                <div className="flex justify-between items-end mb-6">
+                    <span className="font-bold text-white">Total Bayar</span>
+                    <span className="text-2xl font-bold text-primary">{formatRupiah(finalTotal)}</span>
+                </div>
+
+                <button 
+                    onClick={handleCheckout}
+                    disabled={processing}
+                    className="w-full bg-gradient-to-r from-primary to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-primary/25 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                    {processing ? (
+                        <>
+                           <Loader2 size={20} className="animate-spin" /> Memproses...
+                        </>
+                    ) : (
+                        <>
+                           <CheckCircle size={20} /> 
+                           {finalTotal <= 0 ? 'Proses Pesanan Gratis' : 'Bayar Sekarang'}
+                        </>
+                    )}
+                </button>
+            </div>
+        </div>
+      </div>
     </div>
   );
 };

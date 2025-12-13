@@ -25,6 +25,7 @@ export interface Product {
   description: string;
   price: number;
   discount_price?: number; // If set, this is the active price
+  cost_price?: number; // Harga Modal (COGS)
   category: string;
   image_url: string;
   file_url: string; // Link to download or access
@@ -65,6 +66,7 @@ export interface OrderItem {
   product_id: string;
   product_name: string;
   price: number;
+  cost_price?: number; // Stored at time of purchase for accurate profit calc
   file_url?: string; // Stored at time of purchase
 }
 

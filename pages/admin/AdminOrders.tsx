@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { getSupabase, FIX_AFFILIATE_AND_QRIS_SQL } from '../../services/supabase';
-import { Order } from '../../types';
+import { Order, OrderItem } from '../../types';
 import { formatRupiah } from '../../services/helpers';
 import { ClipboardList, Filter, ChevronDown, CheckCircle, XCircle, Clock, Loader2, DollarSign, AlertTriangle } from 'lucide-react';
 
@@ -65,8 +65,31 @@ const AdminOrders: React.FC = () => {
     const rate = settings?.value?.affiliate_commission_rate || 0;
     if (rate <= 0) return;
 
-    // 4. Calculate & Add Balance
-    const commission = Math.floor(order.total_amount * (rate / 100));
+    // 4. Calculate PROFIT (Margin)
+    // Formula: (Total Sell Price - Total Cost Price) - Total Discount
+    let totalSellPrice = 0;
+    let totalCostPrice = 0;
+
+    // Iterate over items in the order
+    if (order.items && Array.isArray(order.items)) {
+        order.items.forEach((item: any) => {
+            const qty = item.quantity || 1; // Fallback to 1 if not stored (CartItem stores quantity, OrderItem might need update but usually 1)
+            totalSellPrice += (item.price * qty);
+            
+            // If cost_price is stored in order item, use it. Otherwise, assume 0 (100% profit)
+            totalCostPrice += ((item.cost_price || 0) * qty);
+        });
+    }
+
+    const discount = order.discount_amount || 0;
+    
+    // Net Profit Calculation
+    const grossProfit = totalSellPrice - totalCostPrice;
+    const netProfit = Math.max(0, grossProfit - discount); // Ensure profit isn't negative
+
+    // 5. Calculate Commission Amount based on Net Profit
+    const commission = Math.floor(netProfit * (rate / 100));
+
     if (commission > 0) {
         // Use RPC to safely increment balance
         const { error } = await supabase.rpc('increment_balance', { 
@@ -75,13 +98,13 @@ const AdminOrders: React.FC = () => {
         });
 
         if (!error) {
-            // 5. Mark order as commission paid
+            // 6. Mark order as commission paid
             await supabase
                 .from('orders')
                 .update({ commission_paid: true })
                 .eq('id', order.id);
             
-            console.log(`Commission of ${commission} added to affiliate ${affiliate.id}`);
+            console.log(`Commission of ${commission} (Profit: ${netProfit}) added to affiliate ${affiliate.id}`);
         } else {
             console.error("Failed to add commission", error);
             // Detect if the function is missing
@@ -90,6 +113,9 @@ const AdminOrders: React.FC = () => {
                  setShowSql(true);
             }
         }
+    } else {
+        // Mark as paid even if 0 to prevent reprocessing
+        await supabase.from('orders').update({ commission_paid: true }).eq('id', order.id);
     }
   };
 
