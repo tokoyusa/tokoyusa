@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
-import { getSupabase } from '../../services/supabase';
+import { getSupabase, COST_PRICE_MIGRATION_SQL } from '../../services/supabase';
 import { Product } from '../../types';
-import { Plus, Edit, Trash2, X, Upload, Loader2, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { Plus, Edit, Trash2, X, Upload, Loader2, Image as ImageIcon, AlertCircle, Terminal, AlertTriangle } from 'lucide-react';
 import { formatRupiah } from '../../services/helpers';
 
 const AdminProducts: React.FC = () => {
@@ -12,6 +12,9 @@ const AdminProducts: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState('');
   
+  // Database Schema Error State
+  const [dbError, setDbError] = useState(false);
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
@@ -28,8 +31,17 @@ const AdminProducts: React.FC = () => {
 
   const fetchProducts = async () => {
     if (!supabase) return;
-    const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
-    if (data) setProducts(data);
+    const { data, error } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    
+    if (error) {
+       console.error("Fetch Error:", error);
+       // Check if error relates to missing column
+       if (error.message.includes('cost_price')) {
+          setDbError(true);
+       }
+    } else if (data) {
+       setProducts(data);
+    }
   };
 
   useEffect(() => {
@@ -40,29 +52,43 @@ const AdminProducts: React.FC = () => {
     e.preventDefault();
     if (!supabase) return;
 
-    // Ensure numbers are valid
+    // Payload construction
     const payload = {
-       ...formData,
-       price: Number(formData.price) || 0,
-       discount_price: Number(formData.discount_price) || null,
-       cost_price: Number(formData.cost_price) || 0,
+       name: formData.name,
+       description: formData.description,
+       price: Number(formData.price), // Ensure number
+       discount_price: formData.discount_price ? Number(formData.discount_price) : null,
+       cost_price: Number(formData.cost_price), // Ensure number
+       category: formData.category,
+       image_url: formData.image_url,
+       file_url: formData.file_url,
        is_active: true
     };
 
     try {
+      let error;
       if (editingId) {
-        const { error } = await supabase.from('products').update(payload).eq('id', editingId);
-        if (error) throw error;
+        const res = await supabase.from('products').update(payload).eq('id', editingId);
+        error = res.error;
       } else {
-        const { error } = await supabase.from('products').insert(payload);
-        if (error) throw error;
+        const res = await supabase.from('products').insert(payload);
+        error = res.error;
       }
+
+      if (error) throw error;
       
       setIsModalOpen(false);
       resetForm();
       fetchProducts();
     } catch (error: any) {
-      alert("Gagal menyimpan produk: " + error.message);
+      console.error("Submit Error:", error);
+      if (error.message.includes('cost_price') || error.message.includes('column "cost_price" of relation "products" does not exist')) {
+          setDbError(true);
+          setIsModalOpen(false);
+          alert("GAGAL MENYIMPAN: Database belum diupdate untuk fitur Harga Modal. Silakan ikuti instruksi di bagian atas halaman Admin Produk.");
+      } else {
+          alert("Gagal menyimpan produk: " + error.message);
+      }
     }
   };
 
@@ -94,17 +120,9 @@ const AdminProducts: React.FC = () => {
     setUploadStatus('');
   };
 
-  // Helper to safely handle number inputs
-  const handleNumberChange = (field: 'price' | 'discount_price' | 'cost_price', value: string) => {
-      // Allow empty string to let user clear the input
-      if (value === '') {
-          setFormData(prev => ({ ...prev, [field]: 0 }));
-          return;
-      }
-      const num = parseFloat(value);
-      if (!isNaN(num)) {
-          setFormData(prev => ({ ...prev, [field]: num }));
-      }
+  const copySql = () => {
+     navigator.clipboard.writeText(COST_PRICE_MIGRATION_SQL);
+     alert("SQL Disalin! Silakan jalankan di Supabase SQL Editor.");
   };
 
   // Helper to convert file/blob to Base64
@@ -179,12 +197,10 @@ const AdminProducts: React.FC = () => {
               setFormData(prev => ({ ...prev, [field]: publicUrl }));
           } else {
               console.warn(`Storage upload failed (${error?.message}), falling back to Base64.`);
-              
               if (field === 'file_url' && file.size > 2 * 1024 * 1024) {
                  alert("File terlalu besar untuk disimpan langsung di database (>2MB). Mohon setup Storage Bucket di Supabase atau gunakan link Google Drive.");
                  throw new Error("File too big for Base64 fallback");
               }
-
               setUploadStatus('Menyimpan ke database...');
               const base64 = await fileToBase64(fileToUpload);
               setFormData(prev => ({ ...prev, [field]: base64 }));
@@ -217,6 +233,24 @@ const AdminProducts: React.FC = () => {
         </button>
       </div>
 
+      {dbError && (
+          <div className="bg-red-500/10 border border-red-500/20 p-4 rounded-lg mb-6 flex flex-col gap-2">
+             <div className="flex items-center gap-2 text-red-500 font-bold">
+                <AlertTriangle size={20} /> DATABASE ERROR: Kolom 'cost_price' (Harga Modal) tidak ditemukan!
+             </div>
+             <p className="text-sm text-red-200">
+                Fitur tambah/edit produk dan komisi affiliate tidak akan berfungsi sebelum Anda menjalankan perintah SQL di bawah ini.
+             </p>
+             <div className="bg-slate-950 p-3 rounded font-mono text-xs text-green-400 relative overflow-x-auto">
+                 <pre>{COST_PRICE_MIGRATION_SQL}</pre>
+                 <button onClick={copySql} className="absolute top-2 right-2 bg-slate-800 text-white px-2 py-1 rounded">Copy</button>
+             </div>
+             <button onClick={() => window.location.reload()} className="self-end bg-red-600 text-white px-3 py-1 rounded text-sm mt-2">
+                Sudah dijalankan? Refresh Halaman
+             </button>
+          </div>
+      )}
+
       <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -232,7 +266,8 @@ const AdminProducts: React.FC = () => {
             <tbody className="divide-y divide-slate-700">
               {products.map((p) => {
                 const finalPrice = p.discount_price || p.price;
-                const profit = finalPrice - (p.cost_price || 0);
+                const cost = p.cost_price || 0;
+                const profit = finalPrice - cost;
                 return (
                   <tr key={p.id} className="hover:bg-slate-750">
                     <td className="p-4">
@@ -249,7 +284,7 @@ const AdminProducts: React.FC = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="p-4 text-slate-400">{formatRupiah(p.cost_price || 0)}</td>
+                    <td className="p-4 text-slate-400">{formatRupiah(cost)}</td>
                     <td className="p-4 text-slate-300">{formatRupiah(finalPrice)}</td>
                     <td className="p-4 font-bold text-green-400">{formatRupiah(profit)}</td>
                     <td className="p-4">
@@ -287,15 +322,16 @@ const AdminProducts: React.FC = () => {
                    <input required type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                 </div>
                 
-                {/* PRICING ROW */}
+                {/* PRICING ROW - Standard Input Types to avoid NaN issues */}
                 <div className="col-span-2 md:col-span-1">
                    <label className="block text-sm font-medium mb-1 text-slate-400">Harga Modal (COGS)</label>
                    <input 
                       type="number" 
                       min="0"
                       className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" 
-                      value={formData.cost_price || ''} // Use empty string to avoid 0 stuck
-                      onChange={e => handleNumberChange('cost_price', e.target.value)} 
+                      value={formData.cost_price} 
+                      onChange={e => setFormData({...formData, cost_price: parseFloat(e.target.value) || 0})}
+                      onFocus={e => e.target.select()} // Select all on focus for easy edit
                    />
                 </div>
                  <div className="col-span-2 md:col-span-1">
@@ -305,8 +341,9 @@ const AdminProducts: React.FC = () => {
                       required
                       min="0" 
                       className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" 
-                      value={formData.price || ''} 
-                      onChange={e => handleNumberChange('price', e.target.value)} 
+                      value={formData.price} 
+                      onChange={e => setFormData({...formData, price: parseFloat(e.target.value) || 0})} 
+                      onFocus={e => e.target.select()}
                    />
                 </div>
                 
@@ -316,8 +353,9 @@ const AdminProducts: React.FC = () => {
                       type="number" 
                       min="0"
                       className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" 
-                      value={formData.discount_price || ''} 
-                      onChange={e => handleNumberChange('discount_price', e.target.value)} 
+                      value={formData.discount_price} 
+                      onChange={e => setFormData({...formData, discount_price: parseFloat(e.target.value) || 0})} 
+                      onFocus={e => e.target.select()}
                    />
                 </div>
 

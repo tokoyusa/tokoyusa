@@ -66,20 +66,37 @@ const AdminOrders: React.FC = () => {
     if (rate <= 0) return;
 
     // 4. Calculate PROFIT (Margin)
-    // Formula: (Total Sell Price - Total Cost Price) - Total Discount
     let totalSellPrice = 0;
     let totalCostPrice = 0;
 
-    // Iterate over items in the order
+    // Helper to fetch live product data if snapshot missing cost
+    const getProductCost = async (prodId: string): Promise<number> => {
+       const { data } = await supabase.from('products').select('cost_price').eq('id', prodId).single();
+       return data?.cost_price || 0;
+    };
+
     if (order.items && Array.isArray(order.items)) {
-        order.items.forEach((item: any) => {
-            const qty = item.quantity || 1; 
-            const price = Number(item.price) || 0;
-            const cost = Number(item.cost_price) || 0; // If DB null, defaults to 0
-            
-            totalSellPrice += (price * qty);
-            totalCostPrice += (cost * qty);
-        });
+        // Use for loop for async operations if needed, but for simplicity we iterate sync here first
+        // If snapshot cost is 0, we might want to assume it's legacy data. 
+        // Note: For now we trust snapshot. If snapshot is 0, cost is 0.
+        // If users want to fix old orders, they should update database manually or we add complexity here.
+        // Improved Logic: If order item cost_price is missing/0, try to check if the product has a cost now?
+        // Let's stick to snapshot for consistency, but alert user if cost is 0.
+        
+        for (const item of order.items) {
+             const qty = item.quantity || 1; 
+             const price = Number(item.price) || 0;
+             let cost = Number(item.cost_price) || 0;
+             
+             // FALLBACK: If cost is 0 in snapshot (legacy order), try to fetch from real product table
+             if (cost === 0) {
+                 const liveCost = await getProductCost(item.product_id);
+                 if (liveCost > 0) cost = liveCost;
+             }
+             
+             totalSellPrice += (price * qty);
+             totalCostPrice += (cost * qty);
+        }
     }
 
     const discount = Number(order.discount_amount) || 0;
@@ -109,12 +126,11 @@ const AdminOrders: React.FC = () => {
                 .update({ commission_paid: true })
                 .eq('id', order.id);
             
-            alert(`Komisi Affiliate Berhasil: Rp ${commission} (Profit: ${formatRupiah(netProfit)})`);
+            alert(`Komisi Affiliate Berhasil: Rp ${formatRupiah(commission)}\n(Profit Order: ${formatRupiah(netProfit)} | Rate: ${rate}%)`);
         } else {
             console.error("Failed to add commission", error);
-            // Detect if the function is missing
             if (error.message.includes('function') && error.message.includes('does not exist')) {
-                 alert("Gagal memproses komisi: Fungsi Database 'increment_balance' belum dibuat. Silakan jalankan SQL perbaikan di bawah.");
+                 alert("Gagal memproses komisi: Fungsi Database 'increment_balance' belum dibuat.");
                  setShowSql(true);
             }
         }
@@ -129,7 +145,6 @@ const AdminOrders: React.FC = () => {
      if (!supabase) return;
      setUpdatingId(orderId);
      
-     // Update status
      const { data, error } = await supabase
         .from('orders')
         .update({ status: newStatus })
@@ -140,26 +155,18 @@ const AdminOrders: React.FC = () => {
      setUpdatingId(null);
 
      if (!error && data) {
-        // Update local state
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus as any } : o));
-
-        // IF STATUS IS COMPLETED -> TRIGGER COMMISSION
         if (newStatus === 'completed') {
             await processCommission(data as Order);
         }
      } else {
-        console.error("Update error:", error);
-        
-        // FIX: Handle 'error' possibly being null safely
-        const errorMessage = error?.message || "Unknown error occurred";
-
+        const errorMessage = error?.message || "Unknown error";
         if (errorMessage.includes('commission_paid')) {
-             alert("Error: Kolom 'commission_paid' tidak ditemukan di database. Silakan jalankan SQL perbaikan di bawah.");
+             alert("Error: Kolom 'commission_paid' tidak ditemukan di database.");
              setShowSql(true);
         } else {
              alert("Gagal update status: " + errorMessage);
         }
-        fetchOrders();
      }
   };
 
@@ -224,11 +231,6 @@ const AdminOrders: React.FC = () => {
                    className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded"
                  >Copy</button>
              </div>
-             <div className="mt-2 text-right">
-                <button onClick={() => window.location.reload()} className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-3 py-1 rounded">
-                   Refresh App
-                </button>
-             </div>
          </div>
       )}
 
@@ -240,7 +242,7 @@ const AdminOrders: React.FC = () => {
                 <th className="p-4">ID Pesanan</th>
                 <th className="p-4">Customer</th>
                 <th className="p-4">Total</th>
-                <th className="p-4">Metode</th>
+                <th className="p-4">Profit (Est)</th>
                 <th className="p-4">Status</th>
                 <th className="p-4">Aksi</th>
               </tr>
@@ -251,53 +253,65 @@ const AdminOrders: React.FC = () => {
               ) : filteredOrders.length === 0 ? (
                 <tr><td colSpan={6} className="p-8 text-center text-slate-500">Tidak ada pesanan ditemukan.</td></tr>
               ) : (
-                filteredOrders.map((order) => (
-                  <tr key={order.id} className="hover:bg-slate-750">
-                    <td className="p-4">
-                      <span className="font-mono text-xs bg-slate-900 px-2 py-1 rounded text-slate-300">#{order.id.slice(0,8)}</span>
-                      <div className="text-xs text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</div>
-                      {order.commission_paid && <span className="text-[10px] text-green-500 flex items-center gap-0.5 mt-0.5"><DollarSign size={8}/> Komisi Paid</span>}
-                    </td>
-                    <td className="p-4">
-                      <div className="font-medium text-white">{order.profiles?.full_name || 'Guest/Unknown'}</div>
-                      <div className="text-xs text-slate-500">{order.profiles?.email}</div>
-                    </td>
-                    <td className="p-4 font-bold text-slate-200">
-                       {formatRupiah(order.total_amount)}
-                    </td>
-                    <td className="p-4 text-sm text-slate-300">
-                       {order.payment_method}
-                    </td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${getStatusColor(order.status)}`}>
-                        {getStatusLabel(order.status)}
-                      </span>
-                    </td>
-                    <td className="p-4">
-                       <div className="relative group min-w-[120px]">
-                          {updatingId === order.id ? (
-                            <div className="flex items-center text-xs text-slate-400 gap-1">
-                               <Loader2 size={14} className="animate-spin" /> Updating...
-                            </div>
-                          ) : (
-                             <>
-                              <select 
-                                className="w-full bg-slate-900 border border-slate-600 text-xs rounded p-2 outline-none hover:border-primary transition-colors cursor-pointer appearance-none pr-8"
-                                value={order.status}
-                                onChange={(e) => updateStatus(order.id, e.target.value)}
-                              >
-                                 <option value="pending">Pending</option>
-                                 <option value="processing">Proses</option>
-                                 <option value="completed">Selesai</option>
-                                 <option value="cancelled">Cancel</option>
-                              </select>
-                              <ChevronDown size={14} className="absolute right-2 top-2.5 text-slate-400 pointer-events-none" />
-                             </>
-                          )}
-                       </div>
-                    </td>
-                  </tr>
-                ))
+                filteredOrders.map((order) => {
+                   // Quick Profit Est for Display
+                   let estCost = 0;
+                   order.items?.forEach((i: any) => estCost += (Number(i.cost_price || 0) * (i.quantity || 1)));
+                   const estProfit = order.total_amount - estCost;
+
+                   return (
+                    <tr key={order.id} className="hover:bg-slate-750">
+                        <td className="p-4">
+                        <span className="font-mono text-xs bg-slate-900 px-2 py-1 rounded text-slate-300">#{order.id.slice(0,8)}</span>
+                        <div className="text-xs text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</div>
+                        {order.commission_paid && <span className="text-[10px] text-green-500 flex items-center gap-0.5 mt-0.5"><DollarSign size={8}/> Komisi Paid</span>}
+                        </td>
+                        <td className="p-4">
+                        <div className="font-medium text-white">{order.profiles?.full_name || 'Guest/Unknown'}</div>
+                        <div className="text-xs text-slate-500">{order.profiles?.email}</div>
+                        </td>
+                        <td className="p-4 font-bold text-slate-200">
+                        {formatRupiah(order.total_amount)}
+                        </td>
+                        <td className="p-4 text-xs">
+                        <span className={`font-mono ${estProfit > 0 ? 'text-green-400' : 'text-slate-500'}`}>
+                            {estProfit > 0 ? formatRupiah(estProfit) : '-'}
+                        </span>
+                        {estCost === 0 && order.total_amount > 0 && (
+                            <div className="text-[8px] text-yellow-500">Modal 0?</div>
+                        )}
+                        </td>
+                        <td className="p-4">
+                        <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${getStatusColor(order.status)}`}>
+                            {getStatusLabel(order.status)}
+                        </span>
+                        </td>
+                        <td className="p-4">
+                        <div className="relative group min-w-[120px]">
+                            {updatingId === order.id ? (
+                                <div className="flex items-center text-xs text-slate-400 gap-1">
+                                <Loader2 size={14} className="animate-spin" /> Updating...
+                                </div>
+                            ) : (
+                                <>
+                                <select 
+                                    className="w-full bg-slate-900 border border-slate-600 text-xs rounded p-2 outline-none hover:border-primary transition-colors cursor-pointer appearance-none pr-8"
+                                    value={order.status}
+                                    onChange={(e) => updateStatus(order.id, e.target.value)}
+                                >
+                                    <option value="pending">Pending</option>
+                                    <option value="processing">Proses</option>
+                                    <option value="completed">Selesai</option>
+                                    <option value="cancelled">Cancel</option>
+                                </select>
+                                <ChevronDown size={14} className="absolute right-2 top-2.5 text-slate-400 pointer-events-none" />
+                                </>
+                            )}
+                        </div>
+                        </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

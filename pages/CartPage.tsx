@@ -205,7 +205,8 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
           product_name: item.name,
           price: item.discount_price || item.price,
           cost_price: item.cost_price || 0, // SNAPSHOT COST PRICE FOR PROFIT CALC
-          file_url: item.file_url 
+          file_url: item.file_url,
+          quantity: item.quantity
         })),
         guest_info: !userId ? { name: guestName, whatsapp: guestPhone } : null
       };

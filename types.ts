@@ -62,12 +62,13 @@ export interface Order {
 }
 
 export interface OrderItem {
-  id: string;
+  id?: string;
   product_id: string;
   product_name: string;
   price: number;
   cost_price?: number; // Stored at time of purchase for accurate profit calc
   file_url?: string; // Stored at time of purchase
+  quantity?: number;
 }
 
 export interface StoreSettings {
