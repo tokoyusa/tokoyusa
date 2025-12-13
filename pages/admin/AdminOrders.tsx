@@ -94,7 +94,7 @@ const AdminOrders: React.FC = () => {
              }
              
              // If still no name, use fallback
-             if (!pName) pName = "Produk (Deleted)";
+             if (!pName) pName = "Produk";
              
              totalSellPrice += (price * qty);
              totalCostPrice += (cost * qty);
@@ -125,7 +125,8 @@ const AdminOrders: React.FC = () => {
                 order_id: order.id,
                 amount: commission,
                 source_buyer: order.profiles?.full_name || 'Guest',
-                products: productNames.join(', '),
+                // Pastikan products string terisi
+                products: productNames.length > 0 ? productNames.join(', ') : 'Produk',
             };
 
             await supabase.from('commission_history').insert(historyPayload);

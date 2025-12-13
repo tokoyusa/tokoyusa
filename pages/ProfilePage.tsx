@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getSupabase, BANK_MIGRATION_SQL, HISTORY_MIGRATION_SQL } from '../services/supabase';
 import { UserProfile, Order, CommissionLog } from '../types';
-import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
+import { formatRupiah, generateWhatsAppLink, formatProductName } from '../services/helpers';
 import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check, AlertTriangle, RefreshCw, Sparkles, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
@@ -385,11 +385,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                                 <div key={idx} className="flex justify-between items-center text-sm">
                                    <div className="flex gap-2">
                                        <span className="text-slate-500">{item.quantity || 1}x</span>
-                                       {item.product_name ? (
-                                           <span className="text-white font-semibold">{item.product_name}</span>
-                                       ) : (
-                                           <span className="text-slate-500 italic font-semibold">Produk {item.product_id?.slice(0,4)}...</span>
-                                       )}
+                                       {/* UPDATE: Pakai helper formatProductName */}
+                                       <span className="text-white font-semibold">{formatProductName(item.product_name)}</span>
                                    </div>
                                    
                                    {/* DOWNLOAD BUTTON Logic */}
@@ -492,7 +489,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                                                     {new Date(log.created_at).toLocaleDateString('id-ID')}
                                                 </td>
                                                 <td className="p-3 text-white font-medium max-w-[150px] truncate" title={log.products}>
-                                                    {log.products && log.products !== '' ? log.products : <span className="text-slate-500 italic">Produk (ID {log.order_id.slice(0,4)})</span>}
+                                                    {/* UPDATE: Pakai helper formatProductName */}
+                                                    {formatProductName(log.products)}
                                                 </td>
                                                 <td className="p-3 text-slate-400">
                                                     {log.source_buyer}
