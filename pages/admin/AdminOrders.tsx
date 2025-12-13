@@ -26,10 +26,13 @@ const AdminOrders: React.FC = () => {
       .order('created_at', { ascending: false });
 
     if (data) {
-        // Fix bad product names by fetching from products table
+        // SELF-HEALING: Fix bad product names by fetching from products table AND SAVE TO DB
         const enrichedOrders = await Promise.all(data.map(async (order: any) => {
+             let needsUpdate = false;
+             let newItems = [];
+
              if (order.items && Array.isArray(order.items)) {
-                const newItems = await Promise.all(order.items.map(async (item: any) => {
+                newItems = await Promise.all(order.items.map(async (item: any) => {
                     let currentName = item.product_name || '';
                     
                     // CHECK: Is name generic "Produk"
@@ -42,13 +45,24 @@ const AdminOrders: React.FC = () => {
                     
                     if (isBadName && item.product_id) {
                         const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
-                        if (prod) return { ...item, product_name: prod.name };
+                        if (prod) {
+                             needsUpdate = true;
+                             return { ...item, product_name: prod.name };
+                        }
                     }
                     return item;
                 }));
-                return { ...order, items: newItems };
+             } else {
+                newItems = order.items;
              }
-             return order;
+             
+             // SAVE FIXED DATA
+             if (needsUpdate) {
+                console.log(`Self-Healing: Admin Fixing Order #${order.id}`);
+                await supabase.from('orders').update({ items: newItems }).eq('id', order.id);
+             }
+
+             return { ...order, items: newItems };
         }));
         setOrders(enrichedOrders as Order[]);
     }

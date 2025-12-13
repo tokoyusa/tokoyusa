@@ -63,29 +63,43 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
         .order('created_at', { ascending: false });
         
       if (data) {
-          // AGGRESSIVE FIX: Identify "Produk" placeholders and fetch REAL names
+          // SELF-HEALING: Perbaiki nama produk yang rusak dan SIMPAN KE DB
           const enrichedOrders = await Promise.all(data.map(async (order: any) => {
+             let needsUpdate = false;
+             let newItems = [];
+
              if (order.items && Array.isArray(order.items)) {
-                const newItems = await Promise.all(order.items.map(async (item: any) => {
+                newItems = await Promise.all(order.items.map(async (item: any) => {
                     let currentName = item.product_name || '';
                     
-                    // CHECK: Is name missing, empty, or strictly generic "Produk" / "Produk ..."
+                    // Deteksi nama rusak: Kosong, "Produk", "Produk ...", atau dimulai dengan tanda kurung
                     const isBadName = !currentName || 
                                       currentName.trim() === '' || 
                                       currentName === 'Produk' || 
-                                      currentName.startsWith('Produk') || // Catches "Produk ..."
+                                      currentName.startsWith('Produk') ||
                                       currentName.trim().startsWith('(') || 
                                       currentName === '(-)';
                     
                     if (isBadName && item.product_id) {
                         const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
-                        if (prod) return { ...item, product_name: prod.name };
+                        if (prod) {
+                            needsUpdate = true; // Tandai bahwa pesanan ini perlu diupdate di DB
+                            return { ...item, product_name: prod.name };
+                        }
                     }
                     return item;
                 }));
-                return { ...order, items: newItems };
+             } else {
+                newItems = order.items;
              }
-             return order;
+
+             // JIKA DITEMUKAN PERBAIKAN, UPDATE DATABASE!
+             if (needsUpdate) {
+                console.log(`Self-Healing: Updating Order #${order.id}`);
+                await supabase.from('orders').update({ items: newItems }).eq('id', order.id);
+             }
+
+             return { ...order, items: newItems };
           }));
           setOrders(enrichedOrders as Order[]);
       }
@@ -104,11 +118,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
         .order('created_at', { ascending: false });
       
       if (data) {
-         // Process data: fix missing or bad product names
+         // SELF-HEALING: Perbaiki nama produk di history dan SIMPAN KE DB
          const processedData = await Promise.all(data.map(async (log: any) => {
             let displayProduct = log.products;
+            let needsUpdate = false;
             
-            // 1. Check if the stored history name is generic or bad
+            // Cek apakah nama di history rusak
             const isBadHistoryName = !displayProduct || 
                                      displayProduct === 'Produk' ||
                                      displayProduct.startsWith('Produk') ||
@@ -117,20 +132,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                                      displayProduct.includes('(1x)');
             
             if (isBadHistoryName) {
-                // 2. Fallback to Joined Order Items
+                // Ambil dari detail pesanan asli
                 if (log.orders && log.orders.items && Array.isArray(log.orders.items)) {
                     const names = [];
                     for (const item of log.orders.items) {
                         let pName = item.product_name;
                         
-                        // 3. Check logic for item name too
-                        const isBadItemName = !pName || 
-                                              pName === 'Produk' || 
-                                              pName.startsWith('Produk') ||
-                                              pName.trim() === '' || 
-                                              pName.trim().startsWith('(');
+                        // Cek juga item pesanan, jika rusak ambil dari master produk
+                        const isBadItemName = !pName || pName === 'Produk' || pName.startsWith('Produk') || pName.trim() === '';
 
-                        // If generic, fetch from DB
                         if (isBadItemName && item.product_id) {
                              const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
                              if (prod) pName = prod.name;
@@ -138,9 +148,20 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                         
                         if (pName) names.push(pName);
                     }
-                    if (names.length > 0) displayProduct = names.join(', ');
+                    
+                    if (names.length > 0) {
+                        displayProduct = names.join(', ');
+                        needsUpdate = true;
+                    }
                 }
             }
+
+            // JIKA DITEMUKAN PERBAIKAN, UPDATE DATABASE!
+            if (needsUpdate && displayProduct !== log.products) {
+                 console.log(`Self-Healing: Updating Commission Log #${log.id}`);
+                 await supabase.from('commission_history').update({ products: displayProduct }).eq('id', log.id);
+            }
+
             return { ...log, products: displayProduct };
          }));
          
