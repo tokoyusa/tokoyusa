@@ -51,6 +51,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
      syncProfile();
   }, [user.id]);
 
+  // Helper function to check if a name is "bad"
+  const isBadName = (name: string | undefined) => {
+      if (!name) return true;
+      const n = name.trim().toLowerCase();
+      return n === '' || n === 'produk' || n === 'product' || n.startsWith('produk') || n.startsWith('(') || n === '(-)';
+  };
+
   // 2. Fetch Orders or Commission History based on Tab
   useEffect(() => {
     const fetchOrders = async () => {
@@ -70,20 +77,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
 
              if (order.items && Array.isArray(order.items)) {
                 newItems = await Promise.all(order.items.map(async (item: any) => {
-                    let currentName = item.product_name || '';
+                    let currentName = item.product_name;
                     
-                    // Deteksi nama rusak: Kosong, "Produk", "Produk ...", atau dimulai dengan tanda kurung
-                    const isBadName = !currentName || 
-                                      currentName.trim() === '' || 
-                                      currentName === 'Produk' || 
-                                      currentName.startsWith('Produk') ||
-                                      currentName.trim().startsWith('(') || 
-                                      currentName === '(-)';
-                    
-                    if (isBadName && item.product_id) {
+                    // Jika nama rusak, paksa ambil dari tabel produk
+                    if (isBadName(currentName) && item.product_id) {
                         const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
                         if (prod) {
-                            needsUpdate = true; // Tandai bahwa pesanan ini perlu diupdate di DB
+                            needsUpdate = true;
                             return { ...item, product_name: prod.name };
                         }
                     }
@@ -95,8 +95,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
 
              // JIKA DITEMUKAN PERBAIKAN, UPDATE DATABASE!
              if (needsUpdate) {
-                console.log(`Self-Healing: Updating Order #${order.id}`);
-                await supabase.from('orders').update({ items: newItems }).eq('id', order.id);
+                // Jangan await agar UI tidak lambat, biarkan background process
+                supabase.from('orders').update({ items: newItems }).eq('id', order.id).then(({ error }) => {
+                    if (error) console.error("Auto-fix order failed", error);
+                });
              }
 
              return { ...order, items: newItems };
@@ -123,30 +125,27 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
             let displayProduct = log.products;
             let needsUpdate = false;
             
-            // Cek apakah nama di history rusak
-            const isBadHistoryName = !displayProduct || 
-                                     displayProduct === 'Produk' ||
-                                     displayProduct.startsWith('Produk') ||
-                                     displayProduct === '(-)' || 
-                                     displayProduct.trim().startsWith('(') || 
-                                     displayProduct.includes('(1x)');
-            
-            if (isBadHistoryName) {
-                // Ambil dari detail pesanan asli
+            // 1. Cek apakah nama di history rusak
+            if (isBadName(displayProduct) || displayProduct.includes('(1x)')) {
+                // 2. Coba ambil dari data orders.items yg di-join
                 if (log.orders && log.orders.items && Array.isArray(log.orders.items)) {
-                    const names = [];
+                    const names: string[] = [];
+                    
+                    // Loop item pesanan
                     for (const item of log.orders.items) {
                         let pName = item.product_name;
-                        
-                        // Cek juga item pesanan, jika rusak ambil dari master produk
-                        const isBadItemName = !pName || pName === 'Produk' || pName.startsWith('Produk') || pName.trim() === '';
 
-                        if (isBadItemName && item.product_id) {
+                        // 3. Jika nama di item pesanan JUGA rusak, fetch dari tabel products (Deep Fetch)
+                        if (isBadName(pName) && item.product_id) {
                              const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
-                             if (prod) pName = prod.name;
+                             if (prod) {
+                                 pName = prod.name;
+                             }
                         }
                         
-                        if (pName) names.push(pName);
+                        if (pName && !isBadName(pName)) {
+                            names.push(pName);
+                        }
                     }
                     
                     if (names.length > 0) {
@@ -158,8 +157,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
 
             // JIKA DITEMUKAN PERBAIKAN, UPDATE DATABASE!
             if (needsUpdate && displayProduct !== log.products) {
-                 console.log(`Self-Healing: Updating Commission Log #${log.id}`);
-                 await supabase.from('commission_history').update({ products: displayProduct }).eq('id', log.id);
+                 supabase.from('commission_history').update({ products: displayProduct }).eq('id', log.id).then();
             }
 
             return { ...log, products: displayProduct };
@@ -475,7 +473,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                                 <div key={idx} className="flex justify-between items-center text-sm">
                                    <div className="flex gap-2">
                                        <span className="text-slate-500">{item.quantity || 1}x</span>
-                                       {/* UPDATE: Pakai helper formatProductName */}
+                                       {/* UPDATE: Pakai helper formatProductName (sudah tidak dipotong) */}
                                        <span className="text-white font-semibold">{formatProductName(item.product_name)}</span>
                                    </div>
                                    

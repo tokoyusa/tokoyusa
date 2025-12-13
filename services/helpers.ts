@@ -20,24 +20,21 @@ export const generateAffiliateCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 };
 
-// Fungsi diperbarui: Membersihkan nama rusak dan ambil 2 kata depan
+// Fungsi diperbarui: HAPUS LOGIKA PEMOTONGAN KATA
 export const formatProductName = (name: string | undefined | null): string => {
   // 1. Cek jika nama kosong atau pola rusak
   if (!name || name.trim() === '' || name === '(-)' || name.trim().startsWith('(')) {
-      return 'Produk';
+      return 'Produk (Nama Tidak Tersedia)';
   }
   
-  // 2. Bersihkan suffix jumlah seperti " (1x)" jika ada
+  // 2. Bersihkan suffix jumlah seperti " (1x)" jika ada, tapi biarkan nama produk utuh
   let cleanName = name.replace(/\(\d+x\)/g, '').trim();
   
-  // Jika setelah dibersihkan jadi kosong (misal awalnya cuma "(1x)")
+  // Jika setelah dibersihkan jadi kosong
   if (cleanName === '') return 'Produk';
 
-  // 3. Ambil 2 kata pertama jika lebih dari 2 kata
-  const words = cleanName.split(' ');
-  if (words.length > 2) {
-      return `${words[0]} ${words[1]}`;
-  }
+  // 3. JANGAN MEMOTONG KATA LAGI (Hapus logika split words)
+  // Biarkan nama produk tampil penuh agar tidak membingungkan user
   
   return cleanName;
 };
