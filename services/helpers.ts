@@ -21,31 +21,21 @@ export const generateAffiliateCode = () => {
 };
 
 export const formatProductName = (name: string | undefined | null): string => {
-  // 1. Jika nama kosong/null, kembalikan string generik netral
+  // 1. Jika benar-benar kosong, baru return default
   if (!name || name.trim() === '') {
-      return 'Produk Digital';
+      return 'Produk';
   }
 
-  // 2. Bersihkan nama
   let cleanName = name.trim();
 
-  // Hapus awalan jumlah seperti "1x ", "2x "
-  cleanName = cleanName.replace(/^\d+x\s+/i, '');
+  // 2. HANYA hapus indikator kuantitas di awal (contoh: "1x Nama")
+  cleanName = cleanName.replace(/^\d+x\s+/, '');
   
-  // Hapus akhiran jumlah seperti " (1x)", "(1 item)"
+  // 3. HANYA hapus indikator kuantitas di akhir (contoh: "Nama (1x)")
   cleanName = cleanName.replace(/\s*\(\d+x\)$/i, '');
-  cleanName = cleanName.replace(/\s*\(\d+\s*item\)$/i, '');
 
-  // Hapus karakter aneh jika hanya itu isinya
-  if (cleanName === '(-)' || cleanName === '()') return 'Produk Digital';
-  
-  // Jika setelah dibersihkan menjadi kosong atau hanya "Produk", biarkan apa adanya atau return 'Produk Digital'
-  // Jangan return pesan error "Tidak Tersedia"
-  if (cleanName.toLowerCase() === 'produk' || cleanName === '') {
-      // Kita coba return nama asli dulu (walaupun cuma 'Produk')
-      // karena mungkin self-healing di page belum selesai loading nama aslinya
-      return 'Produk'; 
-  }
+  // 4. JANGAN PERNAH me-return "Produk Digital" atau "Nama Tidak Tersedia"
+  // Biarkan user melihat nama aslinya meskipun itu cuma "(-)" agar mereka tau datanya memang begitu
   
   return cleanName;
 };

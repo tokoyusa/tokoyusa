@@ -81,7 +81,7 @@ create table if not exists public.products (
   description text,
   price numeric not null,
   discount_price numeric,
-  cost_price numeric default 0, -- NEW: Harga Modal
+  cost_price numeric default 0, 
   category text,
   image_url text,
   file_url text,
@@ -112,7 +112,7 @@ create table if not exists public.orders (
   payment_method text,
   payment_proof text,
   items jsonb,
-  guest_info jsonb,
+  guest_info jsonb, -- FIELD PENTING UNTUK GUEST CHECKOUT
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -122,7 +122,18 @@ create table if not exists public.settings (
   value jsonb
 );
 
--- RLS POLICIES (Simplified)
+-- COMMISSION HISTORY
+create table if not exists public.commission_history (
+  id uuid default uuid_generate_v4() primary key,
+  affiliate_id uuid references public.profiles(id),
+  order_id uuid references public.orders(id),
+  amount numeric not null,
+  source_buyer text,
+  products text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- RLS POLICIES
 alter table public.profiles enable row level security;
 create policy "Public profiles are viewable by everyone." on public.profiles for select using (true);
 create policy "Users can insert their own profile." on public.profiles for insert with check (auth.uid() = id);
@@ -142,6 +153,11 @@ create policy "Users can view own orders." on public.orders for select using (au
 create policy "Admins can view all orders." on public.orders for select using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 create policy "Public can insert orders" on public.orders for insert with check (true);
 create policy "Admins can update orders" on public.orders for update using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+
+alter table public.commission_history enable row level security;
+create policy "Users can view own commissions" on public.commission_history for select using (auth.uid() = affiliate_id);
+create policy "Admins can view all commissions" on public.commission_history for select using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+create policy "Admins can insert commissions" on public.commission_history for insert with check (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
 
 alter table public.settings enable row level security;
 create policy "Settings viewable by everyone" on public.settings for select using (true);
@@ -172,7 +188,6 @@ NOTIFY pgrst, 'reload config';
 `;
 
 export const VOUCHER_MIGRATION_SQL = `
-create extension if not exists "uuid-ossp";
 create table if not exists public.vouchers (
   id uuid default uuid_generate_v4() primary key,
   code text not null unique,
@@ -191,8 +206,9 @@ NOTIFY pgrst, 'reload config';
 `;
 
 export const GUEST_ORDER_MIGRATION_SQL = `
-ALTER TABLE public.orders ALTER COLUMN user_id DROP NOT NULL;
+-- PERBAIKAN KOLOM ORDER UNTUK GUEST --
 ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS guest_info jsonb;
+ALTER TABLE public.orders ALTER COLUMN user_id DROP NOT NULL;
 DROP POLICY IF EXISTS "Users can insert orders." ON public.orders;
 CREATE POLICY "Public can insert orders" ON public.orders FOR INSERT WITH CHECK (true);
 NOTIFY pgrst, 'reload config';
@@ -212,7 +228,6 @@ NOTIFY pgrst, 'reload config';
 `;
 
 export const COST_PRICE_MIGRATION_SQL = `
--- JALANKAN INI UNTUK MENAMBAHKAN KOLOM HARGA MODAL --
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS cost_price numeric DEFAULT 0;
 NOTIFY pgrst, 'reload config';
 `;

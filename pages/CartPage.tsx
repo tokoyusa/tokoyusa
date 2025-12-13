@@ -2,8 +2,8 @@
 import React, { useState } from 'react';
 import { CartItem, UserProfile, StoreSettings, Voucher } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, UserPlus, Lock, Mail, User, ExternalLink, ShoppingBag, Download } from 'lucide-react';
-import { getSupabase } from '../services/supabase';
+import { Trash2, CreditCard, Wallet, QrCode, CheckCircle, Smartphone, Ticket, Loader2, X, UserPlus, Lock, Mail, User, ExternalLink, ShoppingBag, Download, AlertTriangle, Terminal } from 'lucide-react';
+import { getSupabase, GUEST_ORDER_MIGRATION_SQL } from '../services/supabase';
 import { useNavigate } from 'react-router-dom';
 
 interface CartPageProps {
@@ -18,11 +18,11 @@ type PaymentMethod = 'TRANSFER' | 'EWALLET' | 'QRIS' | 'TRIPAY';
 
 const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, user, settings }) => {
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod>('TRANSFER');
-  const [selectedProvider, setSelectedProvider] = useState<string>(''); // For specific bank/wallet selection
+  const [selectedProvider, setSelectedProvider] = useState<string>(''); 
   const [processing, setProcessing] = useState(false);
   const [orderSuccess, setOrderSuccess] = useState<string | null>(null);
   
-  // State to remember order details for WhatsApp
+  // State for order confirmation
   const [lastOrderTotal, setLastOrderTotal] = useState(0); 
   const [lastOrderItems, setLastOrderItems] = useState<CartItem[]>([]);
   const [lastOrderMethod, setLastOrderMethod] = useState<string>('');
@@ -33,11 +33,14 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
   const [checkingVoucher, setCheckingVoucher] = useState(false);
 
-  // Guest/Auto-Register Checkout State
+  // Guest State
   const [guestName, setGuestName] = useState('');
   const [guestEmail, setGuestEmail] = useState('');
   const [guestPassword, setGuestPassword] = useState('');
   const [guestPhone, setGuestPhone] = useState('');
+  
+  // Error Handling State
+  const [dbError, setDbError] = useState(false);
 
   const navigate = useNavigate();
   const supabase = getSupabase();
@@ -57,9 +60,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     }
   }
 
-  // Ensure discount doesn't exceed subtotal
   if (discountAmount > rawSubtotal) discountAmount = rawSubtotal;
-
   const finalTotal = Math.max(0, rawSubtotal - discountAmount);
   
   // --- VOUCHER HANDLER ---
@@ -89,19 +90,22 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
      setVoucherCode('');
   };
 
+  const copySql = () => {
+     navigator.clipboard.writeText(GUEST_ORDER_MIGRATION_SQL);
+     alert("SQL Disalin!");
+  };
+
   // --- CHECKOUT HANDLER ---
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     if (!supabase) return;
 
-    // VALIDASI INPUT GUEST
     if (!user) {
         if (!guestName || !guestEmail || !guestPassword || !guestPhone) {
             alert("Mohon lengkapi data diri Anda untuk pendaftaran otomatis.");
             return;
         }
     } else if (selectedMethod !== 'QRIS' && selectedMethod !== 'TRIPAY') {
-       // Validate Provider selection for specific methods if Logged In
        if (selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && !selectedProvider) {
           alert("Silakan pilih Bank tujuan.");
           return;
@@ -113,17 +117,16 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
     }
 
     setProcessing(true);
+    setDbError(false);
 
     try {
       let userId = user?.id;
 
       // 1. AUTO-REGISTER / LOGIN IF GUEST
       if (!user) {
-         // Check if email exists
          const { data: existingUser } = await supabase.from('profiles').select('id').eq('email', guestEmail).single();
          
          if (existingUser) {
-             // Try to login (Simplification: In real app, prompt for password)
              const { data: loginData, error: loginError } = await (supabase.auth as any).signInWithPassword({
                  email: guestEmail,
                  password: guestPassword
@@ -136,7 +139,6 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
              }
              userId = loginData.user.id;
          } else {
-             // Register New User
              const { data: authData, error: authError } = await (supabase.auth as any).signUp({
                  email: guestEmail,
                  password: guestPassword,
@@ -144,28 +146,21 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
              });
 
              if (authError) throw authError;
-             
              userId = authData.user?.id;
              
-             // Create Profile Manual Ensure
              if (userId) {
-                // Check if profile created by trigger, if not create
-                const { error: profileError } = await supabase.from('profiles').insert({
+                await supabase.from('profiles').insert({
                     id: userId,
                     email: guestEmail,
                     full_name: guestName,
                     phone: guestPhone,
                     role: 'user'
                 }).select();
-                
-                if (profileError && !profileError.message.includes('duplicate')) {
-                    console.error("Profile creation error", profileError);
-                }
              }
          }
       }
 
-      // 2. CHECK REFERRAL (AFFILIATE) from LocalStorage
+      // 2. CHECK REFERRAL
       let referredBy = null;
       if (user?.referred_by) {
           referredBy = user.referred_by;
@@ -173,27 +168,25 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
           referredBy = localStorage.getItem('digitalstore_referral');
       }
 
-      // If user was just created (guest), update their referral code
       if (userId && referredBy && !user?.referred_by) {
           await supabase.from('profiles').update({ referred_by: referredBy }).eq('id', userId);
       }
 
-      // 3. PREPARE DETAILED PAYMENT METHOD STRING
+      // 3. PREPARE METHOD STRING
       let detailedMethod: string = selectedMethod;
       if (finalTotal <= 0) {
           detailedMethod = 'GRATIS / FREE';
       } else if (selectedMethod === 'TRANSFER' || selectedMethod === 'EWALLET') {
-          // Add Provider Name (e.g., "EWALLET - DANA")
           if (selectedProvider) {
               detailedMethod = `${selectedMethod} - ${selectedProvider}`;
           }
       }
 
-      // 4. CREATE ORDER
       const status = finalTotal <= 0 ? 'completed' : 'pending';
 
+      // 4. PREPARE PAYLOAD
       const payload: any = {
-        user_id: userId, // Can be null if really Guest, but we auto-registered
+        user_id: userId,
         total_amount: finalTotal,
         subtotal: rawSubtotal,
         discount_amount: discountAmount,
@@ -202,32 +195,70 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
         payment_method: detailedMethod,
         items: cart.map(item => ({
           product_id: item.id,
-          product_name: item.name,
+          product_name: item.name, // Ensure this is the FULL name
           price: item.discount_price || item.price,
-          cost_price: item.cost_price || 0, // SNAPSHOT COST PRICE FOR PROFIT CALC
+          cost_price: item.cost_price || 0,
           file_url: item.file_url,
           quantity: item.quantity
         })),
         guest_info: !userId ? { name: guestName, whatsapp: guestPhone } : null
       };
 
-      const { data: orderData, error } = await supabase
-        .from('orders')
-        .insert(payload)
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      // 5. SUCCESS HANDLING
-      setLastOrderTotal(finalTotal);
-      setLastOrderItems(cart); // Save items for WA message
-      setLastOrderMethod(detailedMethod); // Save specific method
-      setIsFreeOrder(finalTotal <= 0);
-      setOrderSuccess(orderData.id);
-      clearCart();
+      // 5. INSERT WITH AUTO-RETRY FALLBACK
+      // First attempt: With guest_info
+      let orderDataResult;
       
-      // Clear voucher
+      try {
+          const { data, error } = await supabase.from('orders').insert(payload).select().single();
+          if (error) throw error;
+          orderDataResult = data;
+      } catch (insertError: any) {
+          // CRITICAL FIX: If error is about missing column, retry WITHOUT that column
+          if (
+              insertError.message.includes('guest_info') || 
+              insertError.message.includes('column "guest_info" of relation "orders" does not exist') ||
+              insertError.message.includes('schema cache')
+          ) {
+              console.warn("Retrying order without guest_info column...");
+              delete payload.guest_info; // Remove problematic field
+              
+              const { data: retryData, error: retryError } = await supabase.from('orders').insert(payload).select().single();
+              
+              if (retryError) {
+                  // If it still fails, check for other missing columns (like subtotal)
+                  if (retryError.message.includes('subtotal') || retryError.message.includes('discount_amount')) {
+                      console.warn("Retrying order minimal payload...");
+                      // Minimal payload fallback
+                      const minimalPayload = {
+                          user_id: userId,
+                          total_amount: finalTotal,
+                          status: status,
+                          payment_method: detailedMethod,
+                          items: payload.items
+                      };
+                      const { data: minimalData, error: minimalError } = await supabase.from('orders').insert(minimalPayload).select().single();
+                      if (minimalError) throw minimalError;
+                      orderDataResult = minimalData;
+                  } else {
+                      throw retryError;
+                  }
+              } else {
+                  orderDataResult = retryData;
+              }
+              // Show warning but let order succeed
+              setDbError(true);
+          } else {
+              throw insertError;
+          }
+      }
+
+      // 6. SUCCESS
+      setLastOrderTotal(finalTotal);
+      setLastOrderItems(cart);
+      setLastOrderMethod(detailedMethod);
+      setIsFreeOrder(finalTotal <= 0);
+      setOrderSuccess(orderDataResult.id);
+      clearCart();
       setAppliedVoucher(null);
       setVoucherCode('');
 
@@ -239,9 +270,7 @@ const CartPage: React.FC<CartPageProps> = ({ cart, removeFromCart, clearCart, us
   };
 
   const handleConfirmWA = () => {
-    // Build Detailed Product List
     const itemsList = lastOrderItems.map((item, idx) => `${idx + 1}. ${item.name} (x${item.quantity})`).join('\n');
-
     const message = `Halo Admin, saya sudah melakukan checkout.
 
 *Detail Pesanan:*
@@ -261,10 +290,24 @@ Mohon segera diproses. Terima kasih.`;
     window.open(url, '_blank');
   };
 
-  // --- RENDER SUCCESS SCREEN ---
   if (orderSuccess) {
     return (
       <div className="max-w-md mx-auto py-12 px-4 text-center">
+        {dbError && (
+             <div className="mb-6 bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg text-left">
+                 <div className="flex items-center gap-2 text-yellow-500 font-bold mb-1">
+                    <AlertTriangle size={16} /> Perhatian Admin
+                 </div>
+                 <p className="text-xs text-yellow-200 mb-2">
+                    Pesanan berhasil dibuat dengan mode <strong>Fallback</strong>. Database Anda kehilangan kolom <code>guest_info</code>. Jalankan SQL ini agar fitur Guest berjalan normal:
+                 </p>
+                 <div className="bg-slate-950 p-2 rounded text-[10px] font-mono text-green-400 overflow-x-auto relative">
+                    {GUEST_ORDER_MIGRATION_SQL}
+                    <button onClick={copySql} className="absolute right-1 top-1 bg-slate-800 text-white px-2 rounded">Copy</button>
+                 </div>
+             </div>
+        )}
+      
         <div className="bg-slate-800 rounded-2xl p-8 border border-slate-700 shadow-2xl">
           <div className="w-16 h-16 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg shadow-green-500/30">
             <CheckCircle className="text-white w-8 h-8" />
@@ -336,7 +379,6 @@ Mohon segera diproses. Terima kasih.`;
     );
   }
 
-  // --- RENDER EMPTY CART ---
   if (cart.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-4">
@@ -352,7 +394,6 @@ Mohon segera diproses. Terima kasih.`;
     );
   }
 
-  // --- RENDER CHECKOUT FORM ---
   return (
     <div className="max-w-4xl mx-auto py-6 px-4">
       <h1 className="text-2xl font-bold mb-6 flex items-center gap-2">
@@ -489,7 +530,6 @@ Mohon segera diproses. Terima kasih.`;
                             </button>
                         )}
                         
-                        {/* Sub-selection for Bank */}
                         {selectedMethod === 'TRANSFER' && settings.bank_accounts.length > 0 && (
                             <div className="pl-4 pr-1 mb-2 space-y-2 animate-in slide-in-from-top-2 duration-200">
                                 {settings.bank_accounts.map((bank, idx) => (
@@ -517,7 +557,6 @@ Mohon segera diproses. Terima kasih.`;
                             </button>
                         )}
 
-                        {/* Sub-selection for E-Wallet */}
                         {selectedMethod === 'EWALLET' && settings.e_wallets.length > 0 && (
                              <div className="pl-4 pr-1 mb-2 space-y-2 animate-in slide-in-from-top-2 duration-200">
                                 {settings.e_wallets.map((wallet, idx) => (
@@ -548,7 +587,6 @@ Mohon segera diproses. Terima kasih.`;
                 </div>
             )}
 
-            {/* Summary & Pay Button */}
             <div className="bg-slate-800 p-6 rounded-xl border border-slate-700 sticky top-24">
                 <h2 className="font-bold text-white mb-4">Ringkasan Belanja</h2>
                 <div className="space-y-2 text-sm text-slate-400 mb-4 border-b border-slate-700 pb-4">
