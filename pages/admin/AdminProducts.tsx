@@ -1,218 +1,387 @@
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { SupabaseConfig } from '../types';
+import React, { useEffect, useState } from 'react';
+import { getSupabase } from '../../services/supabase';
+import { Product } from '../../types';
+import { Plus, Edit, Trash2, X, Upload, Loader2, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { formatRupiah } from '../../services/helpers';
 
-const CONFIG_KEY = 'digitalstore_supabase_config';
+const AdminProducts: React.FC = () => {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState('');
+  
+  // Form State
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    price: 0,
+    discount_price: 0,
+    cost_price: 0, // NEW FIELD
+    category: '',
+    image_url: '',
+    file_url: ''
+  });
 
-export const getStoredConfig = (): SupabaseConfig | null => {
-  // 1. Check Environment Variables first (For Vercel Production)
-  const env = (import.meta as any).env;
-  const envUrl = env?.VITE_SUPABASE_URL;
-  const envKey = env?.VITE_SUPABASE_ANON_KEY;
+  const supabase = getSupabase();
 
-  if (envUrl && envKey) {
-     return { url: envUrl, anonKey: envKey };
-  }
+  const fetchProducts = async () => {
+    if (!supabase) return;
+    const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false });
+    if (data) setProducts(data);
+  };
 
-  // 2. Check Local Storage (For Manual Setup)
-  const stored = localStorage.getItem(CONFIG_KEY);
-  return stored ? JSON.parse(stored) : null;
-};
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
-export const saveConfig = (config: SupabaseConfig) => {
-  localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-};
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabase) return;
 
-export const resetConfig = () => {
-  localStorage.removeItem(CONFIG_KEY);
-};
+    const payload = {
+       ...formData,
+       discount_price: formData.discount_price || null,
+       cost_price: formData.cost_price || 0,
+       is_active: true
+    };
 
-let supabase: SupabaseClient | null = null;
-
-// Function to initialize or re-initialize the client
-export const initSupabase = () => {
-  const config = getStoredConfig();
-  if (config && config.url && config.anonKey) {
     try {
-      supabase = createClient(config.url, config.anonKey);
-    } catch (e) {
-      console.error("Failed to initialize Supabase", e);
-      supabase = null;
+      if (editingId) {
+        await supabase.from('products').update(payload).eq('id', editingId);
+      } else {
+        await supabase.from('products').insert(payload);
+      }
+      
+      setIsModalOpen(false);
+      resetForm();
+      fetchProducts();
+    } catch (error: any) {
+      alert("Gagal menyimpan produk: " + error.message);
     }
-  } else {
-    supabase = null;
-  }
-  return supabase;
+  };
+
+  const handleEdit = (p: Product) => {
+    setFormData({
+      name: p.name,
+      description: p.description || '',
+      price: p.price,
+      discount_price: p.discount_price || 0,
+      cost_price: p.cost_price || 0,
+      category: p.category || '',
+      image_url: p.image_url || '',
+      file_url: p.file_url || ''
+    });
+    setEditingId(p.id);
+    setIsModalOpen(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Hapus produk ini?') && supabase) {
+      await supabase.from('products').delete().eq('id', id);
+      fetchProducts();
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({ name: '', description: '', price: 0, discount_price: 0, cost_price: 0, category: '', image_url: '', file_url: '' });
+    setEditingId(null);
+    setUploadStatus('');
+  };
+
+  // Helper to convert file/blob to Base64
+  const fileToBase64 = (file: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  // Helper to resize image client-side before upload
+  const resizeImage = (file: File, maxWidth: number = 800): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.src = URL.createObjectURL(file);
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob((blob) => {
+          if (blob) resolve(blob);
+          else reject(new Error('Canvas to Blob failed'));
+        }, 'image/jpeg', 0.7); // Compress to JPEG 70% quality
+      };
+      img.onerror = reject;
+    });
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'image_url' | 'file_url') => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      setUploading(true);
+      
+      try {
+          let fileToUpload: File | Blob = file;
+          let fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`;
+
+          // Only resize if it is the product image (not the downloadable file)
+          if (field === 'image_url' && file.type.startsWith('image/')) {
+             setUploadStatus('Mengompres gambar...');
+             try {
+                fileToUpload = await resizeImage(file);
+                fileName = fileName.replace(/\.[^/.]+$/, "") + ".jpg";
+             } catch (resizeErr) {
+                console.warn("Resize failed, using original", resizeErr);
+             }
+          }
+
+          setUploadStatus('Mengupload ke server...');
+
+          // 1. Try Supabase Storage first
+          const bucket = field === 'image_url' ? 'images' : 'files';
+          
+          const { data, error } = await supabase!.storage.from(bucket).upload(fileName, fileToUpload);
+          
+          if (!error && data) {
+              const { data: { publicUrl } } = supabase!.storage.from(bucket).getPublicUrl(fileName);
+              setFormData(prev => ({ ...prev, [field]: publicUrl }));
+          } else {
+              console.warn(`Storage upload failed (${error?.message}), falling back to Base64.`);
+              
+              if (field === 'file_url' && file.size > 2 * 1024 * 1024) {
+                 alert("File terlalu besar untuk disimpan langsung di database (>2MB). Mohon setup Storage Bucket di Supabase atau gunakan link Google Drive.");
+                 throw new Error("File too big for Base64 fallback");
+              }
+
+              setUploadStatus('Menyimpan ke database...');
+              const base64 = await fileToBase64(fileToUpload);
+              setFormData(prev => ({ ...prev, [field]: base64 }));
+          }
+      } catch (err: any) {
+          console.error("Upload critical error", err);
+          if (!err.message.includes("File too big")) {
+             try {
+                const base64 = await fileToBase64(file);
+                setFormData(prev => ({ ...prev, [field]: base64 }));
+             } catch(e) {
+                alert("Gagal memproses file. Silakan gunakan link manual.");
+             }
+          }
+      } finally {
+          setUploading(false);
+          setUploadStatus('');
+      }
+  };
+
+  return (
+    <div className="py-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Manajemen Produk</h1>
+        <button 
+          onClick={() => { resetForm(); setIsModalOpen(true); }}
+          className="bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
+        >
+          <Plus size={20} /> Tambah Produk
+        </button>
+      </div>
+
+      <div className="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-900 text-slate-400 uppercase text-xs">
+              <tr>
+                <th className="p-4">Nama</th>
+                <th className="p-4">Modal</th>
+                <th className="p-4">Harga Jual</th>
+                <th className="p-4">Profit</th>
+                <th className="p-4">Aksi</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-700">
+              {products.map((p) => {
+                const finalPrice = p.discount_price || p.price;
+                const profit = finalPrice - (p.cost_price || 0);
+                return (
+                  <tr key={p.id} className="hover:bg-slate-750">
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <img 
+                          src={p.image_url || 'https://via.placeholder.com/150'} 
+                          className="w-10 h-10 rounded object-cover bg-slate-700" 
+                          alt="" 
+                          onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=No+Img'; }}
+                        />
+                        <div>
+                           <div className="font-medium">{p.name}</div>
+                           {!p.is_active && <span className="text-xs bg-red-500/20 text-red-500 px-1 rounded">Nonaktif</span>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-4 text-slate-400">{formatRupiah(p.cost_price || 0)}</td>
+                    <td className="p-4 text-slate-300">{formatRupiah(finalPrice)}</td>
+                    <td className="p-4 font-bold text-green-400">{formatRupiah(profit)}</td>
+                    <td className="p-4">
+                      <div className="flex gap-2">
+                        <button onClick={() => handleEdit(p)} className="p-2 text-blue-400 hover:bg-slate-700 rounded"><Edit size={16} /></button>
+                        <button onClick={() => handleDelete(p.id)} className="p-2 text-red-400 hover:bg-slate-700 rounded"><Trash2 size={16} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        {products.length === 0 && (
+            <div className="p-8 text-center text-slate-500">
+                Belum ada produk.
+            </div>
+        )}
+      </div>
+
+      {/* Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="bg-slate-800 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border border-slate-700">
+            <div className="p-6 border-b border-slate-700 flex justify-between items-center sticky top-0 bg-slate-800 z-10">
+              <h2 className="text-xl font-bold">{editingId ? 'Edit Produk' : 'Tambah Produk Baru'}</h2>
+              <button onClick={() => setIsModalOpen(false)}><X className="text-slate-400 hover:text-white" /></button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-2">
+                   <label className="block text-sm font-medium mb-1">Nama Produk</label>
+                   <input required type="text" className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
+                </div>
+                
+                {/* PRICING ROW */}
+                <div className="col-span-2 md:col-span-1">
+                   <label className="block text-sm font-medium mb-1 text-slate-400">Harga Modal (COGS)</label>
+                   <input required type="number" className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" value={formData.cost_price} onChange={e => setFormData({...formData, cost_price: parseInt(e.target.value)})} />
+                </div>
+                 <div className="col-span-2 md:col-span-1">
+                   <label className="block text-sm font-medium mb-1">Harga Jual</label>
+                   <input required type="number" className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" value={formData.price} onChange={e => setFormData({...formData, price: parseInt(e.target.value)})} />
+                </div>
+                
+                <div className="col-span-2 md:col-span-1">
+                   <label className="block text-sm font-medium mb-1">Harga Diskon (Opsional)</label>
+                   <input type="number" className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" value={formData.discount_price} onChange={e => setFormData({...formData, discount_price: parseInt(e.target.value)})} />
+                </div>
+
+                <div className="col-span-2 md:col-span-1">
+                   <label className="block text-sm font-medium mb-1">Kategori</label>
+                   <input list="categories" className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} />
+                   <datalist id="categories">
+                     <option value="Software" />
+                     <option value="Course" />
+                     <option value="E-Book" />
+                     <option value="Template" />
+                     <option value="Premium Account" />
+                   </datalist>
+                </div>
+
+                <div className="col-span-2">
+                   <label className="block text-sm font-medium mb-1">Deskripsi</label>
+                   <textarea rows={4} className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} />
+                </div>
+
+                {/* IMAGE UPLOAD SECTION */}
+                <div className="col-span-2">
+                   <label className="block text-sm font-medium mb-1">Gambar Produk</label>
+                   
+                   <div className="flex flex-col gap-3">
+                     <div className="flex gap-2 items-start">
+                       <input 
+                          type="text" 
+                          className="flex-1 bg-slate-900 border border-slate-600 rounded p-2 text-sm focus:ring-1 focus:ring-primary outline-none" 
+                          placeholder="https://... (atau upload file)" 
+                          value={formData.image_url} 
+                          onChange={e => setFormData({...formData, image_url: e.target.value})} 
+                       />
+                       <label className={`bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded cursor-pointer flex items-center gap-2 transition-colors flex-shrink-0 ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                          {uploading && formData.image_url === '' ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                          <span className="text-sm">Upload</span>
+                          <input type="file" className="hidden" accept="image/*" disabled={uploading} onChange={(e) => handleFileUpload(e, 'image_url')} />
+                       </label>
+                     </div>
+                     
+                     {uploading && uploadStatus && (
+                        <div className="text-xs text-primary animate-pulse flex items-center gap-1">
+                           <Loader2 size={12} className="animate-spin" /> {uploadStatus}
+                        </div>
+                     )}
+                     
+                     {/* Preview Image */}
+                     {formData.image_url && !formData.image_url.startsWith('data:application') && (
+                       <div className="relative w-full h-32 bg-slate-900 rounded border border-slate-700 overflow-hidden flex items-center justify-center">
+                          <img 
+                            src={formData.image_url} 
+                            alt="Preview" 
+                            className="h-full object-contain"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} 
+                          />
+                          <div className="absolute bottom-1 right-1 bg-black/60 px-2 py-1 rounded text-xs text-white">Preview</div>
+                       </div>
+                     )}
+                   </div>
+                </div>
+
+                {/* FILE UPLOAD SECTION */}
+                <div className="col-span-2">
+                   <label className="block text-sm font-medium mb-1">Link File Produk / Download</label>
+                   <div className="flex gap-2">
+                     <input 
+                        type="text" 
+                        className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" 
+                        placeholder="https://drive.google.com/..." 
+                        value={formData.file_url} 
+                        onChange={e => setFormData({...formData, file_url: e.target.value})} 
+                      />
+                      <label className={`bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded cursor-pointer flex items-center ${uploading ? 'opacity-50 pointer-events-none' : ''}`}>
+                        {uploading && !formData.image_url ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+                        <input type="file" className="hidden" disabled={uploading} onChange={(e) => handleFileUpload(e, 'file_url')} />
+                     </label>
+                   </div>
+                   <p className="text-[10px] text-slate-500 mt-1">
+                      <AlertCircle size={10} className="inline mr-1" />
+                      Untuk file besar {">"} 2MB, disarankan menggunakan link Google Drive/Dropbox.
+                   </p>
+                </div>
+              </div>
+              
+              <div className="pt-4 flex justify-end gap-2 border-t border-slate-700 mt-4">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-slate-300 hover:text-white transition-colors">Batal</button>
+                <button 
+                  type="submit" 
+                  disabled={uploading}
+                  className="px-6 py-2 bg-primary hover:bg-blue-600 disabled:bg-slate-600 text-white rounded-lg font-medium transition-colors flex items-center gap-2"
+                >
+                  {uploading ? 'Memproses...' : 'Simpan Produk'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
-initSupabase();
-
-export const getSupabase = () => {
-  if (!supabase) {
-    return initSupabase();
-  }
-  return supabase;
-};
-
-export const SQL_SCHEMA = `
--- Enable UUID extension
-create extension if not exists "uuid-ossp";
-
--- PROFILES
-create table if not exists public.profiles (
-  id uuid references auth.users not null primary key,
-  email text,
-  role text default 'user',
-  full_name text,
-  affiliate_code text,
-  referred_by text,
-  phone text,
-  balance numeric default 0,
-  bank_name text,
-  bank_number text,
-  bank_holder text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- PRODUCTS
-create table if not exists public.products (
-  id uuid default uuid_generate_v4() primary key,
-  name text not null,
-  description text,
-  price numeric not null,
-  discount_price numeric,
-  cost_price numeric default 0, -- NEW: Harga Modal
-  category text,
-  image_url text,
-  file_url text,
-  is_active boolean default true,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- VOUCHERS
-create table if not exists public.vouchers (
-  id uuid default uuid_generate_v4() primary key,
-  code text not null unique,
-  discount_type text not null, 
-  discount_value numeric not null,
-  is_active boolean default true,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- ORDERS
-create table if not exists public.orders (
-  id uuid default uuid_generate_v4() primary key,
-  user_id uuid references public.profiles(id),
-  total_amount numeric not null,
-  subtotal numeric,
-  discount_amount numeric,
-  voucher_code text,
-  status text default 'pending', 
-  commission_paid boolean default false,
-  payment_method text,
-  payment_proof text,
-  items jsonb,
-  guest_info jsonb,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- SETTINGS
-create table if not exists public.settings (
-  key text primary key,
-  value jsonb
-);
-
--- RLS POLICIES (Simplified)
-alter table public.profiles enable row level security;
-create policy "Public profiles are viewable by everyone." on public.profiles for select using (true);
-create policy "Users can insert their own profile." on public.profiles for insert with check (auth.uid() = id);
-create policy "Users can update own profile." on public.profiles for update using (auth.uid() = id);
-
-alter table public.products enable row level security;
-create policy "Products are viewable by everyone." on public.products for select using (true);
-create policy "Admins can insert products." on public.products for insert with check (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
-create policy "Admins can update products." on public.products for update using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
-
-alter table public.vouchers enable row level security;
-create policy "Admins can manage vouchers" on public.vouchers using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
-create policy "Public can read active vouchers" on public.vouchers for select using (is_active = true);
-
-alter table public.orders enable row level security;
-create policy "Users can view own orders." on public.orders for select using (auth.uid() = user_id);
-create policy "Admins can view all orders." on public.orders for select using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
-create policy "Public can insert orders" on public.orders for insert with check (true);
-create policy "Admins can update orders" on public.orders for update using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
-
-alter table public.settings enable row level security;
-create policy "Settings viewable by everyone" on public.settings for select using (true);
-create policy "Admins can update settings" on public.settings for update using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
-create policy "Admins can insert settings" on public.settings for insert with check (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
-
--- FUNCTIONS
-create or replace function increment_balance(user_id uuid, amount numeric)
-returns void as $$
-begin
-  update public.profiles
-  set balance = coalesce(balance, 0) + amount
-  where id = user_id;
-end;
-$$ language plpgsql security definer;
-`;
-
-export const BANK_MIGRATION_SQL = `
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_name text;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_number text;
-ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS bank_holder text;
-NOTIFY pgrst, 'reload config';
-`;
-
-export const COMMISSION_MIGRATION_SQL = `
-ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS commission_paid boolean DEFAULT false;
-NOTIFY pgrst, 'reload config';
-`;
-
-export const VOUCHER_MIGRATION_SQL = `
-create extension if not exists "uuid-ossp";
-create table if not exists public.vouchers (
-  id uuid default uuid_generate_v4() primary key,
-  code text not null unique,
-  discount_type text not null, 
-  discount_value numeric not null,
-  is_active boolean default true,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-alter table public.vouchers enable row level security;
-create policy "Admins can manage vouchers" on public.vouchers using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
-create policy "Public can read active vouchers" on public.vouchers for select using (is_active = true);
-ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS subtotal numeric;
-ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS discount_amount numeric;
-ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS voucher_code text;
-NOTIFY pgrst, 'reload config';
-`;
-
-export const GUEST_ORDER_MIGRATION_SQL = `
-ALTER TABLE public.orders ALTER COLUMN user_id DROP NOT NULL;
-ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS guest_info jsonb;
-DROP POLICY IF EXISTS "Users can insert orders." ON public.orders;
-CREATE POLICY "Public can insert orders" ON public.orders FOR INSERT WITH CHECK (true);
-NOTIFY pgrst, 'reload config';
-`;
-
-export const FIX_AFFILIATE_AND_QRIS_SQL = `
-create or replace function increment_balance(user_id uuid, amount numeric)
-returns void as $$
-begin
-  update public.profiles
-  set balance = coalesce(balance, 0) + amount
-  where id = user_id;
-end;
-$$ language plpgsql security definer;
-ALTER TABLE public.orders ADD COLUMN IF NOT EXISTS commission_paid boolean DEFAULT false;
-NOTIFY pgrst, 'reload config';
-`;
-
-export const COST_PRICE_MIGRATION_SQL = `
--- JALANKAN INI UNTUK MENAMBAHKAN KOLOM HARGA MODAL --
-ALTER TABLE public.products ADD COLUMN IF NOT EXISTS cost_price numeric DEFAULT 0;
-NOTIFY pgrst, 'reload config';
-`;
+export default AdminProducts;
