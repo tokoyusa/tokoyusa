@@ -63,12 +63,15 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
         .order('created_at', { ascending: false });
         
       if (data) {
-          // ENRICH DATA: If product_name is missing in JSON, fetch from products table
+          // AGGRESSIVE FIX: Iterate all items. If name is bad/missing/generic, fetch REAL name from products table.
           const enrichedOrders = await Promise.all(data.map(async (order: any) => {
              if (order.items && Array.isArray(order.items)) {
                 const newItems = await Promise.all(order.items.map(async (item: any) => {
-                    // Check if name is missing or looks like "1x"
-                    if (!item.product_name || item.product_name.trim() === '') {
+                    let currentName = item.product_name || '';
+                    // Detect bad names: empty, starts with (, or is just "Produk"
+                    const isBadName = !currentName || currentName.trim() === '' || currentName.trim().startsWith('(') || currentName === '(-)';
+                    
+                    if (isBadName && item.product_id) {
                         const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
                         if (prod) return { ...item, product_name: prod.name };
                     }
@@ -95,22 +98,36 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
         .order('created_at', { ascending: false });
       
       if (data) {
-         // Process data to fix missing product names
-         const processedData = data.map((log: any) => {
+         // Process data: fix missing or bad product names
+         const processedData = await Promise.all(data.map(async (log: any) => {
             let displayProduct = log.products;
             
-            // If log.products is empty or just "(-)", try to get from joined order
-            if (!displayProduct || displayProduct === '(-)' || displayProduct.trim() === '') {
+            // 1. Check if the stored history name is bad
+            const isBadHistoryName = !displayProduct || displayProduct === '(-)' || displayProduct.trim().startsWith('(') || displayProduct.includes('(1x)');
+            
+            if (isBadHistoryName) {
+                // 2. Fallback to Joined Order Items
                 if (log.orders && log.orders.items && Array.isArray(log.orders.items)) {
-                    // Extract names from order items
-                    const names = log.orders.items.map((i: any) => i.product_name || 'Produk').join(', ');
-                    displayProduct = names;
+                    const names = [];
+                    for (const item of log.orders.items) {
+                        let pName = item.product_name;
+                        
+                        // 3. If Order Item name is ALSO bad, fetch from Products table (Deep Fetch)
+                        if (!pName || pName.trim() === '' || pName.trim().startsWith('(')) {
+                             if (item.product_id) {
+                                 const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
+                                 if (prod) pName = prod.name;
+                             }
+                        }
+                        
+                        if (pName) names.push(pName);
+                    }
+                    if (names.length > 0) displayProduct = names.join(', ');
                 }
             }
             return { ...log, products: displayProduct };
-         });
+         }));
          
-         // Second pass: if still empty, we might need to fetch IDs (edge case, skipping for perf unless needed)
          setCommissionLogs(processedData);
 
       } else if (error && error.message.includes('relation "public.commission_history" does not exist')) {

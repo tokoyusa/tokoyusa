@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { getSupabase, FIX_AFFILIATE_AND_QRIS_SQL, HISTORY_MIGRATION_SQL } from '../../services/supabase';
 import { Order, OrderItem } from '../../types';
-import { formatRupiah } from '../../services/helpers';
+import { formatRupiah, formatProductName } from '../../services/helpers';
 import { ClipboardList, Filter, ChevronDown, CheckCircle, XCircle, Clock, Loader2, DollarSign, AlertTriangle } from 'lucide-react';
 
 const AdminOrders: React.FC = () => {
@@ -26,7 +26,24 @@ const AdminOrders: React.FC = () => {
       .order('created_at', { ascending: false });
 
     if (data) {
-       setOrders(data as Order[]);
+        // Fix bad product names by fetching from products table
+        const enrichedOrders = await Promise.all(data.map(async (order: any) => {
+             if (order.items && Array.isArray(order.items)) {
+                const newItems = await Promise.all(order.items.map(async (item: any) => {
+                    let currentName = item.product_name || '';
+                    const isBadName = !currentName || currentName.trim() === '' || currentName.trim().startsWith('(') || currentName === '(-)';
+                    
+                    if (isBadName && item.product_id) {
+                        const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
+                        if (prod) return { ...item, product_name: prod.name };
+                    }
+                    return item;
+                }));
+                return { ...order, items: newItems };
+             }
+             return order;
+        }));
+        setOrders(enrichedOrders as Order[]);
     }
     setLoading(false);
   };
@@ -85,11 +102,11 @@ const AdminOrders: React.FC = () => {
              let pName = item.product_name;
              
              // FALLBACK: If cost is 0 or name is missing (legacy order), try to fetch from real product table
-             if (cost === 0 || !pName) {
+             if (cost === 0 || !pName || pName.trim().startsWith('(')) {
                  const liveData = await getProductDetails(item.product_id);
                  if (liveData) {
                     if (cost === 0) cost = liveData.cost_price || 0;
-                    if (!pName) pName = liveData.name;
+                    if (!pName || pName.trim().startsWith('(')) pName = liveData.name;
                  }
              }
              
@@ -299,11 +316,8 @@ const AdminOrders: React.FC = () => {
                                {order.items?.map((item, idx) => (
                                    <li key={idx} className="flex gap-1 items-start">
                                        <span className="text-slate-500 whitespace-nowrap">{item.quantity || 1}x</span>
-                                       {item.product_name ? (
-                                           <span>{item.product_name}</span>
-                                       ) : (
-                                           <span className="text-slate-500 italic">Produk {item.product_id?.slice(0,4)}...</span>
-                                       )}
+                                       {/* UPDATE: Use formatProductName */}
+                                       <span className="text-slate-300">{formatProductName(item.product_name)}</span>
                                    </li>
                                ))}
                            </ul>

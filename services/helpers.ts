@@ -20,16 +20,24 @@ export const generateAffiliateCode = () => {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 };
 
-// Fungsi baru untuk memotong nama produk sesuai request user
+// Fungsi diperbarui: Membersihkan nama rusak dan ambil 2 kata depan
 export const formatProductName = (name: string | undefined | null): string => {
-  if (!name || name.trim() === '') return 'Produk';
-  
-  // Jika nama lebih dari 20 karakter (sebelumnya 25), ambil 2 kata pertama saja
-  if (name.length > 20) {
-      const words = name.split(' ');
-      if (words.length >= 2) {
-          return `${words[0]} ${words[1]}...`;
-      }
+  // 1. Cek jika nama kosong atau pola rusak
+  if (!name || name.trim() === '' || name === '(-)' || name.trim().startsWith('(')) {
+      return 'Produk';
   }
-  return name;
+  
+  // 2. Bersihkan suffix jumlah seperti " (1x)" jika ada
+  let cleanName = name.replace(/\(\d+x\)/g, '').trim();
+  
+  // Jika setelah dibersihkan jadi kosong (misal awalnya cuma "(1x)")
+  if (cleanName === '') return 'Produk';
+
+  // 3. Ambil 2 kata pertama jika lebih dari 2 kata
+  const words = cleanName.split(' ');
+  if (words.length > 2) {
+      return `${words[0]} ${words[1]}`;
+  }
+  
+  return cleanName;
 };
