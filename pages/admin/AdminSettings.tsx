@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
 import { StoreSettings } from '../../types';
-import { Save, RefreshCw, Upload, Loader2, Image as ImageIcon, Wallet, Database, Terminal, AlertCircle } from 'lucide-react';
+import { Save, RefreshCw, Upload, Loader2, Image as ImageIcon, Wallet, Database, Terminal, AlertCircle, History } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getSupabase, BANK_MIGRATION_SQL, COST_PRICE_MIGRATION_SQL } from '../../services/supabase';
+import { getSupabase, BANK_MIGRATION_SQL, COST_PRICE_MIGRATION_SQL, HISTORY_MIGRATION_SQL } from '../../services/supabase';
 
 interface AdminSettingsProps {
   settings: StoreSettings;
@@ -307,9 +307,16 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
 
              <button 
                 onClick={() => showSqlModal(COST_PRICE_MIGRATION_SQL)}
+                className="w-full bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded flex items-center justify-start gap-2 text-sm font-bold"
+             >
+                <Terminal size={14} /> SQL: Update Harga Modal
+             </button>
+
+             <button 
+                onClick={() => showSqlModal(HISTORY_MIGRATION_SQL)}
                 className="w-full bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-2 rounded flex items-center justify-start gap-2 text-sm font-bold animate-pulse"
              >
-                <Terminal size={14} /> SQL: Update Harga Modal (PENTING)
+                <History size={14} /> SQL: Fitur Riwayat Komisi (BARU)
              </button>
           </div>
           

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { getSupabase, FIX_AFFILIATE_AND_QRIS_SQL } from '../../services/supabase';
+import { getSupabase, FIX_AFFILIATE_AND_QRIS_SQL, HISTORY_MIGRATION_SQL } from '../../services/supabase';
 import { Order, OrderItem } from '../../types';
 import { formatRupiah } from '../../services/helpers';
 import { ClipboardList, Filter, ChevronDown, CheckCircle, XCircle, Clock, Loader2, DollarSign, AlertTriangle } from 'lucide-react';
@@ -11,6 +11,7 @@ const AdminOrders: React.FC = () => {
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [filter, setFilter] = useState('all');
   const [showSql, setShowSql] = useState(false);
+  const [activeSql, setActiveSql] = useState('');
 
   const supabase = getSupabase();
 
@@ -68,6 +69,7 @@ const AdminOrders: React.FC = () => {
     // 4. Calculate PROFIT (Margin)
     let totalSellPrice = 0;
     let totalCostPrice = 0;
+    let productNames: string[] = [];
 
     // Helper to fetch live product data if snapshot missing cost
     const getProductCost = async (prodId: string): Promise<number> => {
@@ -76,13 +78,6 @@ const AdminOrders: React.FC = () => {
     };
 
     if (order.items && Array.isArray(order.items)) {
-        // Use for loop for async operations if needed, but for simplicity we iterate sync here first
-        // If snapshot cost is 0, we might want to assume it's legacy data. 
-        // Note: For now we trust snapshot. If snapshot is 0, cost is 0.
-        // If users want to fix old orders, they should update database manually or we add complexity here.
-        // Improved Logic: If order item cost_price is missing/0, try to check if the product has a cost now?
-        // Let's stick to snapshot for consistency, but alert user if cost is 0.
-        
         for (const item of order.items) {
              const qty = item.quantity || 1; 
              const price = Number(item.price) || 0;
@@ -96,6 +91,7 @@ const AdminOrders: React.FC = () => {
              
              totalSellPrice += (price * qty);
              totalCostPrice += (cost * qty);
+             productNames.push(item.product_name);
         }
     }
 
@@ -103,14 +99,10 @@ const AdminOrders: React.FC = () => {
     
     // Net Profit Calculation
     const grossProfit = totalSellPrice - totalCostPrice;
-    const netProfit = Math.max(0, grossProfit - discount); // Ensure profit isn't negative
+    const netProfit = Math.max(0, grossProfit - discount); 
 
     // 5. Calculate Commission Amount based on Net Profit
     const commission = Math.floor(netProfit * (rate / 100));
-
-    console.log(`[AFFILIATE DEBUG] Order: ${order.id}`);
-    console.log(`Sales: ${totalSellPrice}, Cost: ${totalCostPrice}, Discount: ${discount}`);
-    console.log(`Profit: ${netProfit}, Rate: ${rate}%, Commission: ${commission}`);
 
     if (commission > 0) {
         // Use RPC to safely increment balance
@@ -120,6 +112,15 @@ const AdminOrders: React.FC = () => {
         });
 
         if (!error) {
+            // INSERT INTO HISTORY
+            await supabase.from('commission_history').insert({
+                affiliate_id: affiliate.id,
+                order_id: order.id,
+                amount: commission,
+                source_buyer: order.profiles?.full_name || 'Guest',
+                products: productNames.join(', '),
+            });
+
             // 6. Mark order as commission paid
             await supabase
                 .from('orders')
@@ -131,13 +132,13 @@ const AdminOrders: React.FC = () => {
             console.error("Failed to add commission", error);
             if (error.message.includes('function') && error.message.includes('does not exist')) {
                  alert("Gagal memproses komisi: Fungsi Database 'increment_balance' belum dibuat.");
+                 setActiveSql(FIX_AFFILIATE_AND_QRIS_SQL);
                  setShowSql(true);
             }
         }
     } else {
-        // Mark as paid even if 0 to prevent reprocessing
         await supabase.from('orders').update({ commission_paid: true }).eq('id', order.id);
-        console.log("Commission is 0 (likely due to zero profit or low rate)");
+        console.log("Commission is 0");
     }
   };
 
@@ -149,7 +150,7 @@ const AdminOrders: React.FC = () => {
         .from('orders')
         .update({ status: newStatus })
         .eq('id', orderId)
-        .select()
+        .select('*, profiles(full_name)')
         .single();
      
      setUpdatingId(null);
@@ -157,12 +158,21 @@ const AdminOrders: React.FC = () => {
      if (!error && data) {
         setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus as any } : o));
         if (newStatus === 'completed') {
-            await processCommission(data as Order);
+            try {
+                await processCommission(data as Order);
+            } catch (err: any) {
+                if (err.message.includes('relation "public.commission_history" does not exist')) {
+                    alert("ERROR: Tabel riwayat komisi belum dibuat. Silakan jalankan SQL migrasi di halaman Settings.");
+                    setActiveSql(HISTORY_MIGRATION_SQL);
+                    setShowSql(true);
+                }
+            }
         }
      } else {
         const errorMessage = error?.message || "Unknown error";
         if (errorMessage.includes('commission_paid')) {
              alert("Error: Kolom 'commission_paid' tidak ditemukan di database.");
+             setActiveSql(FIX_AFFILIATE_AND_QRIS_SQL);
              setShowSql(true);
         } else {
              alert("Gagal update status: " + errorMessage);
@@ -216,16 +226,16 @@ const AdminOrders: React.FC = () => {
       {showSql && (
          <div className="bg-yellow-500/10 border border-yellow-500/20 p-4 rounded-lg mb-6 animate-pulse">
              <div className="flex items-center gap-2 text-yellow-500 font-bold mb-2">
-                <AlertTriangle size={20} /> Perbaikan Database (Affiliate Error)
+                <AlertTriangle size={20} /> Perbaikan Database Diperlukan
              </div>
              <p className="text-sm text-yellow-200 mb-2">
-                Sistem gagal memproses komisi karena fungsi database hilang. Copy & jalankan kode ini di Supabase SQL Editor:
+                Sistem mendeteksi ada tabel atau fungsi yang hilang. Copy & jalankan kode ini di Supabase SQL Editor:
              </p>
              <div className="bg-slate-950 p-3 rounded font-mono text-xs text-green-400 relative overflow-x-auto">
-                 <pre>{FIX_AFFILIATE_AND_QRIS_SQL}</pre>
+                 <pre>{activeSql}</pre>
                  <button 
                    onClick={() => {
-                      navigator.clipboard.writeText(FIX_AFFILIATE_AND_QRIS_SQL);
+                      navigator.clipboard.writeText(activeSql);
                       alert("Copied!");
                    }} 
                    className="absolute top-2 right-2 bg-slate-800 hover:bg-slate-700 text-white px-2 py-1 rounded"
@@ -239,10 +249,10 @@ const AdminOrders: React.FC = () => {
           <table className="w-full text-left">
             <thead className="bg-slate-900 text-slate-400 uppercase text-xs">
               <tr>
-                <th className="p-4">ID Pesanan</th>
+                <th className="p-4">ID / Tanggal</th>
                 <th className="p-4">Customer</th>
-                <th className="p-4">Total</th>
-                <th className="p-4">Profit (Est)</th>
+                <th className="p-4">Produk</th>
+                <th className="p-4">Total / Profit</th>
                 <th className="p-4">Status</th>
                 <th className="p-4">Aksi</th>
               </tr>
@@ -258,35 +268,42 @@ const AdminOrders: React.FC = () => {
                    let estCost = 0;
                    order.items?.forEach((i: any) => estCost += (Number(i.cost_price || 0) * (i.quantity || 1)));
                    const estProfit = order.total_amount - estCost;
+                   const discount = order.discount_amount || 0;
+                   const finalProfit = Math.max(0, estProfit - discount);
 
                    return (
                     <tr key={order.id} className="hover:bg-slate-750">
-                        <td className="p-4">
-                        <span className="font-mono text-xs bg-slate-900 px-2 py-1 rounded text-slate-300">#{order.id.slice(0,8)}</span>
-                        <div className="text-xs text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</div>
-                        {order.commission_paid && <span className="text-[10px] text-green-500 flex items-center gap-0.5 mt-0.5"><DollarSign size={8}/> Komisi Paid</span>}
+                        <td className="p-4 align-top">
+                           <span className="font-mono text-xs bg-slate-900 px-2 py-1 rounded text-slate-300">#{order.id.slice(0,8)}</span>
+                           <div className="text-xs text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString()}</div>
+                           {order.commission_paid && <span className="text-[10px] text-green-500 flex items-center gap-0.5 mt-0.5"><DollarSign size={8}/> Komisi Paid</span>}
                         </td>
-                        <td className="p-4">
-                        <div className="font-medium text-white">{order.profiles?.full_name || 'Guest/Unknown'}</div>
-                        <div className="text-xs text-slate-500">{order.profiles?.email}</div>
+                        <td className="p-4 align-top">
+                           <div className="font-medium text-white">{order.profiles?.full_name || 'Guest/Unknown'}</div>
+                           <div className="text-xs text-slate-500">{order.profiles?.email}</div>
                         </td>
-                        <td className="p-4 font-bold text-slate-200">
-                        {formatRupiah(order.total_amount)}
+                        <td className="p-4 align-top">
+                           <ul className="text-sm text-slate-300 space-y-1">
+                               {order.items?.map((item, idx) => (
+                                   <li key={idx} className="flex gap-1">
+                                       <span className="text-slate-500">{item.quantity || 1}x</span>
+                                       <span>{item.product_name}</span>
+                                   </li>
+                               ))}
+                           </ul>
                         </td>
-                        <td className="p-4 text-xs">
-                        <span className={`font-mono ${estProfit > 0 ? 'text-green-400' : 'text-slate-500'}`}>
-                            {estProfit > 0 ? formatRupiah(estProfit) : '-'}
-                        </span>
-                        {estCost === 0 && order.total_amount > 0 && (
-                            <div className="text-[8px] text-yellow-500">Modal 0?</div>
-                        )}
+                        <td className="p-4 align-top">
+                           <div className="font-bold text-slate-200">{formatRupiah(order.total_amount)}</div>
+                           <div className="text-[10px] text-slate-500 mt-1">
+                               Profit: <span className="text-green-400">{formatRupiah(finalProfit)}</span>
+                           </div>
                         </td>
-                        <td className="p-4">
-                        <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${getStatusColor(order.status)}`}>
-                            {getStatusLabel(order.status)}
-                        </span>
+                        <td className="p-4 align-top">
+                           <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${getStatusColor(order.status)}`}>
+                              {getStatusLabel(order.status)}
+                           </span>
                         </td>
-                        <td className="p-4">
+                        <td className="p-4 align-top">
                         <div className="relative group min-w-[120px]">
                             {updatingId === order.id ? (
                                 <div className="flex items-center text-xs text-slate-400 gap-1">

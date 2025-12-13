@@ -19,6 +19,16 @@ export interface UserProfile {
   bank_holder?: string;
 }
 
+export interface CommissionLog {
+  id: string;
+  affiliate_id: string;
+  order_id: string;
+  amount: number;
+  source_buyer: string; // Name of the buyer
+  products: string; // Comma separated product names
+  created_at: string;
+}
+
 export interface Product {
   id: string;
   name: string;

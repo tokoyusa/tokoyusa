@@ -216,3 +216,20 @@ export const COST_PRICE_MIGRATION_SQL = `
 ALTER TABLE public.products ADD COLUMN IF NOT EXISTS cost_price numeric DEFAULT 0;
 NOTIFY pgrst, 'reload config';
 `;
+
+export const HISTORY_MIGRATION_SQL = `
+create table if not exists public.commission_history (
+  id uuid default uuid_generate_v4() primary key,
+  affiliate_id uuid references public.profiles(id),
+  order_id uuid references public.orders(id),
+  amount numeric not null,
+  source_buyer text,
+  products text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table public.commission_history enable row level security;
+create policy "Users can view own commissions" on public.commission_history for select using (auth.uid() = affiliate_id);
+create policy "Admins can view all commissions" on public.commission_history for select using (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+create policy "Admins can insert commissions" on public.commission_history for insert with check (exists (select 1 from public.profiles where id = auth.uid() and role = 'admin'));
+NOTIFY pgrst, 'reload config';
+`;

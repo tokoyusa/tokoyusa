@@ -1,9 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
-import { getSupabase, BANK_MIGRATION_SQL } from '../services/supabase';
-import { UserProfile, Order } from '../types';
+import { getSupabase, BANK_MIGRATION_SQL, HISTORY_MIGRATION_SQL } from '../services/supabase';
+import { UserProfile, Order, CommissionLog } from '../types';
 import { formatRupiah, generateWhatsAppLink } from '../services/helpers';
-import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check, AlertTriangle, RefreshCw, Sparkles } from 'lucide-react';
+import { User, Package, Gift, LogOut, Save, Download, Smartphone, CreditCard, DollarSign, Copy, Check, AlertTriangle, RefreshCw, Sparkles, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface ProfilePageProps {
@@ -13,7 +13,9 @@ interface ProfilePageProps {
 const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'orders' | 'affiliate'>('profile');
   const [orders, setOrders] = useState<Order[]>([]);
+  const [commissionLogs, setCommissionLogs] = useState<CommissionLog[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [loadingCommissions, setLoadingCommissions] = useState(false);
   
   // Form States
   const [formData, setFormData] = useState({
@@ -49,7 +51,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
      syncProfile();
   }, [user.id]);
 
-  // 2. Fetch Orders
+  // 2. Fetch Orders or Commission History based on Tab
   useEffect(() => {
     const fetchOrders = async () => {
       if (!supabase) return;
@@ -64,10 +66,30 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
       setLoadingOrders(false);
     };
 
+    const fetchCommissions = async () => {
+      if (!supabase) return;
+      setLoadingCommissions(true);
+      const { data, error } = await supabase
+        .from('commission_history')
+        .select('*')
+        .eq('affiliate_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (data) {
+         setCommissionLogs(data as CommissionLog[]);
+      } else if (error && error.message.includes('relation "public.commission_history" does not exist')) {
+         // Table doesn't exist yet, user might not be seeing history
+         console.warn("Commission history table missing");
+      }
+      setLoadingCommissions(false);
+    };
+
     if (activeTab === 'orders') {
       fetchOrders();
+    } else if (activeTab === 'affiliate' && user.affiliate_code) {
+      fetchCommissions();
     }
-  }, [activeTab, user.id]);
+  }, [activeTab, user.id, user.affiliate_code]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -362,7 +384,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                           <div className="space-y-2">
                              {order.items?.map((item, idx) => (
                                 <div key={idx} className="flex justify-between items-center text-sm">
-                                   <span className="text-slate-300">{item.product_name}</span>
+                                   <div className="flex gap-2">
+                                       <span className="text-slate-500">{item.quantity}x</span>
+                                       <span className="text-white font-semibold">{item.product_name}</span>
+                                   </div>
                                    
                                    {/* DOWNLOAD BUTTON Logic */}
                                    {order.status === 'completed' ? (
@@ -431,6 +456,63 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                              <DollarSign size={16} /> Tarik Saldo (Min. 100rb)
                           </button>
                        </div>
+                    </div>
+                    
+                    {/* RIWAYAT PENDAPATAN SECTION (NEW) */}
+                    <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">
+                        <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                            <h3 className="font-bold text-white flex items-center gap-2">
+                                <DollarSign size={16} className="text-green-400" /> Riwayat Pendapatan
+                            </h3>
+                            {commissionLogs.length === 0 && (
+                                <span className="text-xs text-slate-500">Belum ada data</span>
+                            )}
+                        </div>
+                        
+                        {loadingCommissions ? (
+                            <div className="p-6 text-center text-sm text-slate-500">Loading history...</div>
+                        ) : commissionLogs.length > 0 ? (
+                            <div className="max-h-[300px] overflow-y-auto">
+                                <table className="w-full text-left text-sm">
+                                    <thead className="bg-slate-950 text-slate-500 text-xs uppercase sticky top-0">
+                                        <tr>
+                                            <th className="p-3">Tanggal</th>
+                                            <th className="p-3">Produk</th>
+                                            <th className="p-3">Dari</th>
+                                            <th className="p-3 text-right">Komisi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-800">
+                                        {commissionLogs.map((log) => (
+                                            <tr key={log.id} className="hover:bg-slate-800/50">
+                                                <td className="p-3 text-slate-400 whitespace-nowrap">
+                                                    {new Date(log.created_at).toLocaleDateString('id-ID')}
+                                                </td>
+                                                <td className="p-3 text-white font-medium max-w-[150px] truncate" title={log.products}>
+                                                    {log.products || '-'}
+                                                </td>
+                                                <td className="p-3 text-slate-400">
+                                                    {log.source_buyer}
+                                                </td>
+                                                <td className="p-3 text-right text-green-400 font-bold">
+                                                    +{formatRupiah(log.amount)}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                             <div className="p-6 text-center">
+                                 <p className="text-sm text-slate-500">
+                                     Belum ada riwayat komisi yang tercatat. Bagikan link referral Anda untuk mulai mendapatkan penghasilan!
+                                 </p>
+                                 <div className="mt-4 flex flex-col gap-2 p-3 bg-yellow-500/10 border border-yellow-500/20 rounded text-xs text-yellow-200 text-left">
+                                     <strong className="flex items-center gap-1"><AlertCircle size={12}/> Note:</strong> 
+                                     Jika Anda baru saja mendapatkan komisi tapi tidak muncul di sini, kemungkinan Admin belum mengupdate database untuk fitur "Riwayat". Riwayat baru akan muncul untuk transaksi kedepannya.
+                                 </div>
+                             </div>
+                        )}
                     </div>
 
                     <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-lg text-sm text-blue-200">
