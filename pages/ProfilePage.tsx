@@ -13,7 +13,7 @@ interface ProfilePageProps {
 const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'orders' | 'affiliate'>('profile');
   const [orders, setOrders] = useState<Order[]>([]);
-  const [commissionLogs, setCommissionLogs] = useState<CommissionLog[]>([]);
+  const [commissionLogs, setCommissionLogs] = useState<any[]>([]); // Use any to allow joined data
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [loadingCommissions, setLoadingCommissions] = useState(false);
   
@@ -62,21 +62,57 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
         
-      if (data) setOrders(data as Order[]);
+      if (data) {
+          // ENRICH DATA: If product_name is missing in JSON, fetch from products table
+          const enrichedOrders = await Promise.all(data.map(async (order: any) => {
+             if (order.items && Array.isArray(order.items)) {
+                const newItems = await Promise.all(order.items.map(async (item: any) => {
+                    // Check if name is missing or looks like "1x"
+                    if (!item.product_name || item.product_name.trim() === '') {
+                        const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
+                        if (prod) return { ...item, product_name: prod.name };
+                    }
+                    return item;
+                }));
+                return { ...order, items: newItems };
+             }
+             return order;
+          }));
+          setOrders(enrichedOrders as Order[]);
+      }
       setLoadingOrders(false);
     };
 
     const fetchCommissions = async () => {
       if (!supabase) return;
       setLoadingCommissions(true);
+      
+      // Fetch commissions AND join with orders to fallback if name is missing
       const { data, error } = await supabase
         .from('commission_history')
-        .select('*')
+        .select('*, orders(items)')
         .eq('affiliate_id', user.id)
         .order('created_at', { ascending: false });
       
       if (data) {
-         setCommissionLogs(data as CommissionLog[]);
+         // Process data to fix missing product names
+         const processedData = data.map((log: any) => {
+            let displayProduct = log.products;
+            
+            // If log.products is empty or just "(-)", try to get from joined order
+            if (!displayProduct || displayProduct === '(-)' || displayProduct.trim() === '') {
+                if (log.orders && log.orders.items && Array.isArray(log.orders.items)) {
+                    // Extract names from order items
+                    const names = log.orders.items.map((i: any) => i.product_name || 'Produk').join(', ');
+                    displayProduct = names;
+                }
+            }
+            return { ...log, products: displayProduct };
+         });
+         
+         // Second pass: if still empty, we might need to fetch IDs (edge case, skipping for perf unless needed)
+         setCommissionLogs(processedData);
+
       } else if (error && error.message.includes('relation "public.commission_history" does not exist')) {
          console.warn("Commission history table missing");
       }

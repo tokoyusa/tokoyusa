@@ -22,10 +22,10 @@ export const generateAffiliateCode = () => {
 
 // Fungsi baru untuk memotong nama produk sesuai request user
 export const formatProductName = (name: string | undefined | null): string => {
-  if (!name) return 'Produk';
+  if (!name || name.trim() === '') return 'Produk';
   
-  // Jika nama lebih dari 25 karakter, ambil 2 kata pertama saja
-  if (name.length > 25) {
+  // Jika nama lebih dari 20 karakter (sebelumnya 25), ambil 2 kata pertama saja
+  if (name.length > 20) {
       const words = name.split(' ');
       if (words.length >= 2) {
           return `${words[0]} ${words[1]}...`;
