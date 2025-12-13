@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { StoreSettings } from '../../types';
-import { Save, RefreshCw, Upload, Loader2, Image as ImageIcon, Wallet, Database, Terminal } from 'lucide-react';
+import { Save, RefreshCw, Upload, Loader2, Image as ImageIcon, Wallet, Database, Terminal, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getSupabase, BANK_MIGRATION_SQL, COST_PRICE_MIGRATION_SQL } from '../../services/supabase';
 
@@ -186,7 +186,7 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
           <h2 className="text-lg font-bold border-b border-slate-700 pb-2">Pengaturan Affiliate</h2>
           <div>
             <label className="block text-sm mb-1">Komisi Affiliate (% dari PROFIT/Keuntungan)</label>
-            <p className="text-xs text-slate-400 mb-2">Persentase yang diterima affiliate dari (Harga Jual - Harga Modal) per transaksi.</p>
+            <p className="text-xs text-slate-400 mb-2">Persentase yang diterima affiliate dari <strong>(Harga Jual - Harga Modal)</strong> per transaksi.</p>
             <div className="relative">
               <input 
                 type="number" 
@@ -197,6 +197,13 @@ const AdminSettings: React.FC<AdminSettingsProps> = ({ settings, onUpdate }) => 
                 onChange={(e) => handleNumberChange(e, 'affiliate_commission_rate')} 
               />
               <span className="absolute right-3 top-2 text-slate-400">%</span>
+            </div>
+            
+            <div className="mt-4 bg-blue-500/10 p-3 rounded text-xs text-blue-300 border border-blue-500/20">
+                <p className="font-bold flex items-center gap-1"><AlertCircle size={12}/> Info Penting:</p>
+                <p>
+                    Pastikan Anda mengisi <strong>Harga Modal</strong> di setiap produk. Jika Harga Modal = 0, maka Profit dianggap 100% dari harga jual.
+                </p>
             </div>
           </div>
         </div>

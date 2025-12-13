@@ -73,15 +73,16 @@ const AdminOrders: React.FC = () => {
     // Iterate over items in the order
     if (order.items && Array.isArray(order.items)) {
         order.items.forEach((item: any) => {
-            const qty = item.quantity || 1; // Fallback to 1 if not stored (CartItem stores quantity, OrderItem might need update but usually 1)
-            totalSellPrice += (item.price * qty);
+            const qty = item.quantity || 1; 
+            const price = Number(item.price) || 0;
+            const cost = Number(item.cost_price) || 0; // If DB null, defaults to 0
             
-            // If cost_price is stored in order item, use it. Otherwise, assume 0 (100% profit)
-            totalCostPrice += ((item.cost_price || 0) * qty);
+            totalSellPrice += (price * qty);
+            totalCostPrice += (cost * qty);
         });
     }
 
-    const discount = order.discount_amount || 0;
+    const discount = Number(order.discount_amount) || 0;
     
     // Net Profit Calculation
     const grossProfit = totalSellPrice - totalCostPrice;
@@ -89,6 +90,10 @@ const AdminOrders: React.FC = () => {
 
     // 5. Calculate Commission Amount based on Net Profit
     const commission = Math.floor(netProfit * (rate / 100));
+
+    console.log(`[AFFILIATE DEBUG] Order: ${order.id}`);
+    console.log(`Sales: ${totalSellPrice}, Cost: ${totalCostPrice}, Discount: ${discount}`);
+    console.log(`Profit: ${netProfit}, Rate: ${rate}%, Commission: ${commission}`);
 
     if (commission > 0) {
         // Use RPC to safely increment balance
@@ -104,7 +109,7 @@ const AdminOrders: React.FC = () => {
                 .update({ commission_paid: true })
                 .eq('id', order.id);
             
-            console.log(`Commission of ${commission} (Profit: ${netProfit}) added to affiliate ${affiliate.id}`);
+            alert(`Komisi Affiliate Berhasil: Rp ${commission} (Profit: ${formatRupiah(netProfit)})`);
         } else {
             console.error("Failed to add commission", error);
             // Detect if the function is missing
@@ -116,6 +121,7 @@ const AdminOrders: React.FC = () => {
     } else {
         // Mark as paid even if 0 to prevent reprocessing
         await supabase.from('orders').update({ commission_paid: true }).eq('id', order.id);
+        console.log("Commission is 0 (likely due to zero profit or low rate)");
     }
   };
 

@@ -18,7 +18,7 @@ const AdminProducts: React.FC = () => {
     description: '',
     price: 0,
     discount_price: 0,
-    cost_price: 0, // NEW FIELD
+    cost_price: 0, 
     category: '',
     image_url: '',
     file_url: ''
@@ -40,18 +40,22 @@ const AdminProducts: React.FC = () => {
     e.preventDefault();
     if (!supabase) return;
 
+    // Ensure numbers are valid
     const payload = {
        ...formData,
-       discount_price: formData.discount_price || null,
-       cost_price: formData.cost_price || 0,
+       price: Number(formData.price) || 0,
+       discount_price: Number(formData.discount_price) || null,
+       cost_price: Number(formData.cost_price) || 0,
        is_active: true
     };
 
     try {
       if (editingId) {
-        await supabase.from('products').update(payload).eq('id', editingId);
+        const { error } = await supabase.from('products').update(payload).eq('id', editingId);
+        if (error) throw error;
       } else {
-        await supabase.from('products').insert(payload);
+        const { error } = await supabase.from('products').insert(payload);
+        if (error) throw error;
       }
       
       setIsModalOpen(false);
@@ -88,6 +92,19 @@ const AdminProducts: React.FC = () => {
     setFormData({ name: '', description: '', price: 0, discount_price: 0, cost_price: 0, category: '', image_url: '', file_url: '' });
     setEditingId(null);
     setUploadStatus('');
+  };
+
+  // Helper to safely handle number inputs
+  const handleNumberChange = (field: 'price' | 'discount_price' | 'cost_price', value: string) => {
+      // Allow empty string to let user clear the input
+      if (value === '') {
+          setFormData(prev => ({ ...prev, [field]: 0 }));
+          return;
+      }
+      const num = parseFloat(value);
+      if (!isNaN(num)) {
+          setFormData(prev => ({ ...prev, [field]: num }));
+      }
   };
 
   // Helper to convert file/blob to Base64
@@ -273,16 +290,35 @@ const AdminProducts: React.FC = () => {
                 {/* PRICING ROW */}
                 <div className="col-span-2 md:col-span-1">
                    <label className="block text-sm font-medium mb-1 text-slate-400">Harga Modal (COGS)</label>
-                   <input required type="number" className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" value={formData.cost_price} onChange={e => setFormData({...formData, cost_price: parseInt(e.target.value)})} />
+                   <input 
+                      type="number" 
+                      min="0"
+                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" 
+                      value={formData.cost_price || ''} // Use empty string to avoid 0 stuck
+                      onChange={e => handleNumberChange('cost_price', e.target.value)} 
+                   />
                 </div>
                  <div className="col-span-2 md:col-span-1">
                    <label className="block text-sm font-medium mb-1">Harga Jual</label>
-                   <input required type="number" className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" value={formData.price} onChange={e => setFormData({...formData, price: parseInt(e.target.value)})} />
+                   <input 
+                      type="number"
+                      required
+                      min="0" 
+                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" 
+                      value={formData.price || ''} 
+                      onChange={e => handleNumberChange('price', e.target.value)} 
+                   />
                 </div>
                 
                 <div className="col-span-2 md:col-span-1">
                    <label className="block text-sm font-medium mb-1">Harga Diskon (Opsional)</label>
-                   <input type="number" className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" value={formData.discount_price} onChange={e => setFormData({...formData, discount_price: parseInt(e.target.value)})} />
+                   <input 
+                      type="number" 
+                      min="0"
+                      className="w-full bg-slate-900 border border-slate-600 rounded p-2 focus:ring-1 focus:ring-primary outline-none" 
+                      value={formData.discount_price || ''} 
+                      onChange={e => handleNumberChange('discount_price', e.target.value)} 
+                   />
                 </div>
 
                 <div className="col-span-2 md:col-span-1">
