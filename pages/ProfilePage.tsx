@@ -63,13 +63,19 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
         .order('created_at', { ascending: false });
         
       if (data) {
-          // AGGRESSIVE FIX: Iterate all items. If name is bad/missing/generic, fetch REAL name from products table.
+          // AGGRESSIVE FIX: Identify "Produk" placeholders and fetch REAL names
           const enrichedOrders = await Promise.all(data.map(async (order: any) => {
              if (order.items && Array.isArray(order.items)) {
                 const newItems = await Promise.all(order.items.map(async (item: any) => {
                     let currentName = item.product_name || '';
-                    // Detect bad names: empty, starts with (, or is just "Produk"
-                    const isBadName = !currentName || currentName.trim() === '' || currentName.trim().startsWith('(') || currentName === '(-)';
+                    
+                    // CHECK: Is name missing, empty, or strictly generic "Produk" / "Produk ..."
+                    const isBadName = !currentName || 
+                                      currentName.trim() === '' || 
+                                      currentName === 'Produk' || 
+                                      currentName.startsWith('Produk') || // Catches "Produk ..."
+                                      currentName.trim().startsWith('(') || 
+                                      currentName === '(-)';
                     
                     if (isBadName && item.product_id) {
                         const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
@@ -102,8 +108,13 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
          const processedData = await Promise.all(data.map(async (log: any) => {
             let displayProduct = log.products;
             
-            // 1. Check if the stored history name is bad
-            const isBadHistoryName = !displayProduct || displayProduct === '(-)' || displayProduct.trim().startsWith('(') || displayProduct.includes('(1x)');
+            // 1. Check if the stored history name is generic or bad
+            const isBadHistoryName = !displayProduct || 
+                                     displayProduct === 'Produk' ||
+                                     displayProduct.startsWith('Produk') ||
+                                     displayProduct === '(-)' || 
+                                     displayProduct.trim().startsWith('(') || 
+                                     displayProduct.includes('(1x)');
             
             if (isBadHistoryName) {
                 // 2. Fallback to Joined Order Items
@@ -112,12 +123,17 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                     for (const item of log.orders.items) {
                         let pName = item.product_name;
                         
-                        // 3. If Order Item name is ALSO bad, fetch from Products table (Deep Fetch)
-                        if (!pName || pName.trim() === '' || pName.trim().startsWith('(')) {
-                             if (item.product_id) {
-                                 const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
-                                 if (prod) pName = prod.name;
-                             }
+                        // 3. Check logic for item name too
+                        const isBadItemName = !pName || 
+                                              pName === 'Produk' || 
+                                              pName.startsWith('Produk') ||
+                                              pName.trim() === '' || 
+                                              pName.trim().startsWith('(');
+
+                        // If generic, fetch from DB
+                        if (isBadItemName && item.product_id) {
+                             const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
+                             if (prod) pName = prod.name;
                         }
                         
                         if (pName) names.push(pName);

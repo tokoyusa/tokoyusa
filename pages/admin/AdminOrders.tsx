@@ -31,7 +31,14 @@ const AdminOrders: React.FC = () => {
              if (order.items && Array.isArray(order.items)) {
                 const newItems = await Promise.all(order.items.map(async (item: any) => {
                     let currentName = item.product_name || '';
-                    const isBadName = !currentName || currentName.trim() === '' || currentName.trim().startsWith('(') || currentName === '(-)';
+                    
+                    // CHECK: Is name generic "Produk"
+                    const isBadName = !currentName || 
+                                      currentName.trim() === '' || 
+                                      currentName === 'Produk' || 
+                                      currentName.startsWith('Produk') ||
+                                      currentName.trim().startsWith('(') || 
+                                      currentName === '(-)';
                     
                     if (isBadName && item.product_id) {
                         const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
@@ -101,12 +108,14 @@ const AdminOrders: React.FC = () => {
              let cost = Number(item.cost_price) || 0;
              let pName = item.product_name;
              
-             // FALLBACK: If cost is 0 or name is missing (legacy order), try to fetch from real product table
-             if (cost === 0 || !pName || pName.trim().startsWith('(')) {
+             // FALLBACK: If cost is 0 or name is missing/generic, try to fetch from real product table
+             const isBadName = !pName || pName === 'Produk' || pName.startsWith('Produk') || pName.trim().startsWith('(');
+
+             if (cost === 0 || isBadName) {
                  const liveData = await getProductDetails(item.product_id);
                  if (liveData) {
                     if (cost === 0) cost = liveData.cost_price || 0;
-                    if (!pName || pName.trim().startsWith('(')) pName = liveData.name;
+                    if (isBadName) pName = liveData.name;
                  }
              }
              
