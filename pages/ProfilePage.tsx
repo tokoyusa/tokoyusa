@@ -51,11 +51,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
      syncProfile();
   }, [user.id]);
 
-  // Helper function to check if a name is "bad"
+  // Check if name is generic/bad
   const isBadName = (name: string | undefined) => {
       if (!name) return true;
       const n = name.trim().toLowerCase();
-      return n === '' || n === 'produk' || n === 'product' || n.startsWith('produk') || n.startsWith('(') || n === '(-)';
+      // Checks for: empty, "produk", "product", "1x produk", starts with "(", etc.
+      return n === '' || n === 'produk' || n === 'product' || n.includes('produk (nama tidak tersedia)') || n.startsWith('(') || n === '(-)';
   };
 
   // 2. Fetch Orders or Commission History based on Tab
@@ -70,7 +71,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
         .order('created_at', { ascending: false });
         
       if (data) {
-          // SELF-HEALING: Perbaiki nama produk yang rusak dan SIMPAN KE DB
+          // SELF-HEALING: Iterate orders to fix bad names
           const enrichedOrders = await Promise.all(data.map(async (order: any) => {
              let needsUpdate = false;
              let newItems = [];
@@ -79,10 +80,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                 newItems = await Promise.all(order.items.map(async (item: any) => {
                     let currentName = item.product_name;
                     
-                    // Jika nama rusak, paksa ambil dari tabel produk
+                    // Logic: If name is bad AND we have a product ID, fetch the real name
                     if (isBadName(currentName) && item.product_id) {
                         const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
-                        if (prod) {
+                        if (prod && prod.name) {
                             needsUpdate = true;
                             return { ...item, product_name: prod.name };
                         }
@@ -93,12 +94,9 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                 newItems = order.items;
              }
 
-             // JIKA DITEMUKAN PERBAIKAN, UPDATE DATABASE!
+             // Background Update if needed
              if (needsUpdate) {
-                // Jangan await agar UI tidak lambat, biarkan background process
-                supabase.from('orders').update({ items: newItems }).eq('id', order.id).then(({ error }) => {
-                    if (error) console.error("Auto-fix order failed", error);
-                });
+                supabase.from('orders').update({ items: newItems }).eq('id', order.id).then();
              }
 
              return { ...order, items: newItems };
@@ -120,27 +118,23 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
         .order('created_at', { ascending: false });
       
       if (data) {
-         // SELF-HEALING: Perbaiki nama produk di history dan SIMPAN KE DB
          const processedData = await Promise.all(data.map(async (log: any) => {
             let displayProduct = log.products;
             let needsUpdate = false;
             
-            // 1. Cek apakah nama di history rusak
-            if (isBadName(displayProduct) || displayProduct.includes('(1x)')) {
-                // 2. Coba ambil dari data orders.items yg di-join
+            // 1. Is the current stored name bad?
+            if (isBadName(displayProduct) || displayProduct.includes('Nama Tidak Tersedia')) {
+                // 2. Try to get from joined Order Items
                 if (log.orders && log.orders.items && Array.isArray(log.orders.items)) {
                     const names: string[] = [];
                     
-                    // Loop item pesanan
                     for (const item of log.orders.items) {
                         let pName = item.product_name;
 
-                        // 3. Jika nama di item pesanan JUGA rusak, fetch dari tabel products (Deep Fetch)
+                        // 3. Deep Fetch: If item name is also bad, fetch from products table
                         if (isBadName(pName) && item.product_id) {
                              const { data: prod } = await supabase.from('products').select('name').eq('id', item.product_id).single();
-                             if (prod) {
-                                 pName = prod.name;
-                             }
+                             if (prod) pName = prod.name;
                         }
                         
                         if (pName && !isBadName(pName)) {
@@ -155,7 +149,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                 }
             }
 
-            // JIKA DITEMUKAN PERBAIKAN, UPDATE DATABASE!
+            // Update DB if we found a better name
             if (needsUpdate && displayProduct !== log.products) {
                  supabase.from('commission_history').update({ products: displayProduct }).eq('id', log.id).then();
             }
