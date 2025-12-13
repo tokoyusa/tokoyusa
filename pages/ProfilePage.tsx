@@ -78,7 +78,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
       if (data) {
          setCommissionLogs(data as CommissionLog[]);
       } else if (error && error.message.includes('relation "public.commission_history" does not exist')) {
-         // Table doesn't exist yet, user might not be seeing history
          console.warn("Commission history table missing");
       }
       setLoadingCommissions(false);
@@ -385,8 +384,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                              {order.items?.map((item, idx) => (
                                 <div key={idx} className="flex justify-between items-center text-sm">
                                    <div className="flex gap-2">
-                                       <span className="text-slate-500">{item.quantity}x</span>
-                                       <span className="text-white font-semibold">{item.product_name}</span>
+                                       <span className="text-slate-500">{item.quantity || 1}x</span>
+                                       {item.product_name ? (
+                                           <span className="text-white font-semibold">{item.product_name}</span>
+                                       ) : (
+                                           <span className="text-slate-500 italic font-semibold">Produk {item.product_id?.slice(0,4)}...</span>
+                                       )}
                                    </div>
                                    
                                    {/* DOWNLOAD BUTTON Logic */}
@@ -489,7 +492,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ user }) => {
                                                     {new Date(log.created_at).toLocaleDateString('id-ID')}
                                                 </td>
                                                 <td className="p-3 text-white font-medium max-w-[150px] truncate" title={log.products}>
-                                                    {log.products || '-'}
+                                                    {log.products && log.products !== '' ? log.products : <span className="text-slate-500 italic">Produk (ID {log.order_id.slice(0,4)})</span>}
                                                 </td>
                                                 <td className="p-3 text-slate-400">
                                                     {log.source_buyer}

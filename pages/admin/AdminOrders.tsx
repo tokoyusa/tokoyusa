@@ -66,15 +66,15 @@ const AdminOrders: React.FC = () => {
     const rate = settings?.value?.affiliate_commission_rate || 0;
     if (rate <= 0) return;
 
-    // 4. Calculate PROFIT (Margin)
+    // 4. Calculate PROFIT (Margin) & Gather Product Names
     let totalSellPrice = 0;
     let totalCostPrice = 0;
     let productNames: string[] = [];
 
-    // Helper to fetch live product data if snapshot missing cost
-    const getProductCost = async (prodId: string): Promise<number> => {
-       const { data } = await supabase.from('products').select('cost_price').eq('id', prodId).single();
-       return data?.cost_price || 0;
+    // Helper to fetch live product data if snapshot missing cost or name
+    const getProductDetails = async (prodId: string) => {
+       const { data } = await supabase.from('products').select('name, cost_price').eq('id', prodId).single();
+       return data;
     };
 
     if (order.items && Array.isArray(order.items)) {
@@ -82,16 +82,23 @@ const AdminOrders: React.FC = () => {
              const qty = item.quantity || 1; 
              const price = Number(item.price) || 0;
              let cost = Number(item.cost_price) || 0;
+             let pName = item.product_name;
              
-             // FALLBACK: If cost is 0 in snapshot (legacy order), try to fetch from real product table
-             if (cost === 0) {
-                 const liveCost = await getProductCost(item.product_id);
-                 if (liveCost > 0) cost = liveCost;
+             // FALLBACK: If cost is 0 or name is missing (legacy order), try to fetch from real product table
+             if (cost === 0 || !pName) {
+                 const liveData = await getProductDetails(item.product_id);
+                 if (liveData) {
+                    if (cost === 0) cost = liveData.cost_price || 0;
+                    if (!pName) pName = liveData.name;
+                 }
              }
+             
+             // If still no name, use fallback
+             if (!pName) pName = "Produk (Deleted)";
              
              totalSellPrice += (price * qty);
              totalCostPrice += (cost * qty);
-             productNames.push(item.product_name);
+             productNames.push(`${pName} (${qty}x)`);
         }
     }
 
@@ -113,13 +120,15 @@ const AdminOrders: React.FC = () => {
 
         if (!error) {
             // INSERT INTO HISTORY
-            await supabase.from('commission_history').insert({
+            const historyPayload = {
                 affiliate_id: affiliate.id,
                 order_id: order.id,
                 amount: commission,
                 source_buyer: order.profiles?.full_name || 'Guest',
                 products: productNames.join(', '),
-            });
+            };
+
+            await supabase.from('commission_history').insert(historyPayload);
 
             // 6. Mark order as commission paid
             await supabase
@@ -165,6 +174,8 @@ const AdminOrders: React.FC = () => {
                     alert("ERROR: Tabel riwayat komisi belum dibuat. Silakan jalankan SQL migrasi di halaman Settings.");
                     setActiveSql(HISTORY_MIGRATION_SQL);
                     setShowSql(true);
+                } else {
+                    alert("Gagal memproses komisi: " + err.message);
                 }
             }
         }
@@ -285,9 +296,13 @@ const AdminOrders: React.FC = () => {
                         <td className="p-4 align-top">
                            <ul className="text-sm text-slate-300 space-y-1">
                                {order.items?.map((item, idx) => (
-                                   <li key={idx} className="flex gap-1">
-                                       <span className="text-slate-500">{item.quantity || 1}x</span>
-                                       <span>{item.product_name}</span>
+                                   <li key={idx} className="flex gap-1 items-start">
+                                       <span className="text-slate-500 whitespace-nowrap">{item.quantity || 1}x</span>
+                                       {item.product_name ? (
+                                           <span>{item.product_name}</span>
+                                       ) : (
+                                           <span className="text-slate-500 italic">Produk {item.product_id?.slice(0,4)}...</span>
+                                       )}
                                    </li>
                                ))}
                            </ul>
